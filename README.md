@@ -1,45 +1,53 @@
 # Subscription Manager
 
-A lightweight automated subscription tracking tool that monitors your Gmail inbox, identifies subscription-related emails, and extracts key information using LLM processing.
+A lightweight automated subscription tracking tool that processes your Gmail inbox daily, identifies subscription-related emails, and extracts key information using LLM processing.
 
 ## Overview
 
 This tool automatically:
-- Monitors Gmail for subscription-related emails
-- Uses LLM to classify and extract subscription data
+- Processes Gmail inbox daily for subscription-related emails
+- Uses LLM to detect and extract subscription data
 - Tracks subscription details (vendor, amount, frequency, dates)
-- Stores data locally for privacy
-- Provides insights into your recurring expenses
+- Stores only subscription metadata locally for privacy (no email content)
+- Provides insights into your recurring expenses via web dashboard
 
-## Features (Planned)
+## MVP Features
 
-- Gmail integration for email ingestion
-- LLM-powered email classification and data extraction
-- Local storage for privacy-first approach
-- Dashboard for subscription overview
-- Alerts for upcoming renewals/expirations
+- Gmail OAuth integration for secure email access
+- Daily batch processing with manual refresh capability
+- LLM-powered subscription detection and data extraction
+- On-demand email fetching (no email content storage)
+- Web dashboard for subscription management
+- Search, filter, and sort subscriptions
+- CSV export functionality
+- Edit and delete subscription entries
 
 ## Tech Stack
 
-### Core
-- Node.js
-- Next.js (Frontend & API)
-- TypeScript
-- Gmail API
-- OpenAI API (GPT-4.1-nano)
-- PostgreSQL (Database)
+### Core Stack
+- **Runtime**: Node.js 20+ with TypeScript
+- **Framework**: Next.js 14 (App Router)
+- **Database**: PostgreSQL 17 with Prisma ORM
+- **Styling**: Tailwind CSS
+- **Deployment**: Docker Compose
+
+### External Services
+- **Email**: Gmail API v1
+- **LLM**: OpenAI API (model TBD)
+- **Auth**: Google OAuth 2.0
 
 ### MVP Dependencies
 - Prisma (Database ORM)
 - Tailwind CSS (Styling)
 - Docker & Docker Compose (Self-hosting)
+- node-cron (Daily batch processing)
 
 ### Future Additions
 - NextAuth.js (Multi-user auth)
 - Zod (Response validation)
-- node-cron (Scheduled email checks)
 - React Query (Advanced data fetching)
 - date-fns (Date utilities)
+- Email notifications (renewal reminders)
 
 ## Documentation
 
@@ -54,9 +62,11 @@ This tool automatically:
 
 ## Architecture
 
-- **Self-hosted first**: Designed for Docker deployment with PostgreSQL
-- **Privacy-focused**: All data stays on user's infrastructure
-- **Reference**: Zero email app (`reference/zero-email/`) used for Gmail integration patterns
+- **Daily Batch Processing**: Processes emails every 24 hours with manual refresh capability
+- **On-Demand Email Fetching**: No email content stored - fetches from Gmail API when needed
+- **Single-User MVP**: Hardcoded user_id='1' with multi-user database schema foundation
+- **Self-hosted first**: Designed for Docker Compose deployment with PostgreSQL
+- **Privacy-focused**: Only subscription metadata stored, all data stays on user's infrastructure
 
 ## Development
 

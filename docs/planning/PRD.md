@@ -62,9 +62,11 @@ Automated Subscription Manager is a consumer-focused tool that connects to a use
 
   * Gmail OAuth authentication: Securely connect and authorize access to user’s Gmail inbox.
 
-  * Email ingestion: Fetch relevant emails (e.g., receipts, confirmations, renewal notices).
+  * Email processing: Daily batch processing of emails for subscription detection.
 
-  * Incremental sync: Periodically check for new subscription emails.
+  * Manual refresh: User-triggered incremental sync for immediate updates.
+
+  * On-demand fetching: Fetch email content when needed (no email storage).
 
 * **Subscription Detection & Extraction (Priority: High)**
 
@@ -86,11 +88,11 @@ Automated Subscription Manager is a consumer-focused tool that connects to a use
 
   * Search & filter: Enable users to search, sort, and filter subscriptions.
 
-  * Renewal calendar: Visualize upcoming renewals and payment dates.
+  * Manual refresh: User-triggered sync via dashboard button.
 
   * Export: Allow users to export their subscription data (CSV/JSON).
 
-* **Notifications & Insights (Priority: Medium)**
+* **Future Enhancements (Phase 2)**
 
   * Renewal reminders: Notify users of upcoming charges.
 
@@ -154,11 +156,11 @@ Automated Subscription Manager is a consumer-focused tool that connects to a use
 
   * Export data via download button.
 
-* **Step 5:** User receives notifications (if enabled).
+* **Step 5:** User manages subscriptions.
 
-  * Email or in-app reminders for upcoming renewals.
+  * Manual refresh to check for new subscriptions immediately.
 
-  * Monthly summary of subscription spending.
+  * Export data for external analysis or budgeting tools.
 
 * **Step 6:** User manages account and privacy.
 
@@ -276,11 +278,13 @@ With newfound clarity, Alex cancels unnecessary subscriptions before renewal, sa
 
 ### Scalability & Performance
 
-* Support for thousands of users with varying inbox sizes
+* Support for single-user MVP with multi-user database schema foundation
 
-* Efficient, incremental email sync to minimize API usage and latency
+* Daily batch processing to minimize API usage and costs
 
-* Scalable LLM inference (batch processing, caching)
+* On-demand email fetching to reduce storage requirements
+
+* Direct LLM API calls for immediate processing results
 
 ### Potential Challenges
 
@@ -316,9 +320,9 @@ With newfound clarity, Alex cancels unnecessary subscriptions before renewal, sa
 
 * Dependencies: Google API access, LLM model selection
 
-**Phase 2: UX Polish & Notifications (1 week)**
+**Phase 2: UX Polish & Manual Refresh (1 week)**
 
-* Key Deliverables: Dashboard enhancements, search/filter, renewal reminders, onboarding flow (Product/Design Lead, Engineer)
+* Key Deliverables: Dashboard enhancements, search/filter, manual refresh functionality, onboarding flow (Product/Design Lead, Engineer)
 
 * Dependencies: Core MVP completion
 

@@ -27,7 +27,7 @@ This tool automatically:
 ### Core Stack
 - **Runtime**: Node.js 20+ with TypeScript
 - **Framework**: Next.js 14 (App Router)
-- **Database**: PostgreSQL 17 with Prisma ORM
+- **Database**: PostgreSQL 17 with Drizzle ORM
 - **Styling**: Tailwind CSS
 - **Deployment**: Docker Compose
 
@@ -37,7 +37,7 @@ This tool automatically:
 - **Auth**: Google OAuth 2.0
 
 ### MVP Dependencies
-- Prisma (Database ORM)
+- Drizzle ORM (Database ORM)
 - Tailwind CSS (Styling)
 - Docker & Docker Compose (Self-hosting)
 - node-cron (Daily batch processing)

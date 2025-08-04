@@ -53,10 +53,10 @@ This plan breaks down the implementation into independent projects that can be w
 **Status**: Can start schema design (P1 deliverable 1 complete)
 
 #### Deliverables:
-1. **Prisma Setup**
-   - Install and configure Prisma
+1. **Drizzle Setup**
+   - Install and configure Drizzle ORM
    - Create database connection configuration
-   - Set up Prisma client generation
+   - Set up Drizzle schema and client generation
 
 2. **Database Schema Implementation**
    - Implement full schema from DESIGN.md:
@@ -84,7 +84,7 @@ This plan breaks down the implementation into independent projects that can be w
 
 **Success Criteria**:
 - All tables created with proper relationships
-- Prisma client generates without errors
+- Drizzle schema generates without errors
 - Basic CRUD operations work
 
 ---

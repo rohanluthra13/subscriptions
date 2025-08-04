@@ -28,7 +28,7 @@ Based on technical design in `DESIGN.md`, the implementation is divided into 4 p
 ### Week 1: Foundation & Infrastructure
 **Target**: Core project setup and database foundation
 - Next.js 14 project setup with TypeScript
-- PostgreSQL + Prisma schema implementation
+- PostgreSQL + Drizzle schema implementation
 - Docker Compose configuration
 - Basic authentication framework
 - Environment configuration

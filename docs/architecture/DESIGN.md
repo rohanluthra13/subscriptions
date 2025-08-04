@@ -50,7 +50,7 @@ The system follows a simplified batch processing architecture designed for singl
 #### Core Stack
 - **Runtime**: Node.js 20+ with TypeScript
 - **Framework**: Next.js 14 (App Router)
-- **Database**: PostgreSQL 17 with Prisma ORM
+- **Database**: PostgreSQL 17 with Drizzle ORM
 - **Styling**: Tailwind CSS
 - **Deployment**: Docker Compose
 
@@ -936,10 +936,10 @@ SYNC_INTERVAL_HOURS=6
     "build": "next build",
     "start": "next start",
     "cron": "node dist/cron/scheduler.js",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
     "lint": "next lint",
     "type-check": "tsc --noEmit"
   }
@@ -1095,7 +1095,7 @@ function shouldProcessEmail(email: EmailData): boolean {
 <!-- Aligned with ADR-006: 3-5 week timeline -->
 
 ### Week 1: Foundation & Core Infrastructure
-- [x] Project setup (Next.js, TypeScript, Tailwind, Prisma)
+- [x] Project setup (Next.js, TypeScript, Tailwind, Drizzle)
 - [x] Database schema implementation
 - [x] Docker Compose configuration
 - [x] Gmail OAuth integration

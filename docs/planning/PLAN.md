@@ -1,72 +1,72 @@
 # Subscription Manager - Development Plan
 
 ## Overview
-Build a lightweight subscription tracking tool that monitors Gmail, uses LLM to identify subscriptions, and provides insights through a dashboard.
+Build a lightweight subscription tracking tool that processes Gmail daily, uses LLM to identify subscriptions, and provides insights through a dashboard.
 
 ## Development Approach
-Start by deeply understanding Zero's email architecture, then adapt and simplify it for subscription tracking needs.
+Discovery phase completed - comprehensive technical design and architectural decisions documented. Ready for implementation workplan and resource allocation.
 
-## Discovery Phase
+## Discovery Phase ✅ **COMPLETED**
 
-### 1. **Analyze Zero's Architecture**
-Key areas to investigate:
-- How do they structure email data? (`src/db/schema.ts`)
-- What's their Gmail sync strategy? (`src/lib/driver/google.ts`)
-- How do they process emails? (background jobs, queues)
-- What patterns do they use for error handling?
-- How is their Docker setup structured?
+### Completed Analysis
+- ✅ Zero email architecture patterns analyzed and adapted
+- ✅ Gmail integration strategy defined (OAuth + on-demand fetching)
+- ✅ Processing pipeline architecture designed (daily batch + manual refresh)
+- ✅ Database schema specified (PostgreSQL with multi-user foundation)
+- ✅ LLM integration approach decided (direct OpenAI API calls)
+- ✅ Infrastructure planned (Docker Compose deployment)
 
-### 2. **Extract Core Patterns**
-From Zero's approach, identify:
-- Minimal tables needed for email ingestion
-- Authentication flow for Gmail
-- Processing pipeline architecture
-- Deployment configuration
+### Discovery Phase Outputs ✅ **DELIVERED**
+1. ✅ **`DESIGN.md`** - Complete technical design with architecture, database schema, processing flows, API design
+2. ✅ **`DECISIONS.md`** - 6 architectural decision records covering all major technical choices
+3. ✅ **Updated `README.md`** - Refined MVP features and accurate tech stack
 
-### 3. **Design Subscription-Specific Architecture**
-Based on Zero's patterns, determine:
-- What to keep (email storage, sync logic)
-- What to modify (processing pipeline for LLM)
-- What to add (subscription-specific tables)
-- What to remove (email UI, sending capabilities)
+## Implementation Phases (Ready for Resource Allocation)
 
-### Discovery Phase Outputs
-1. **`zero_analysis.md`** - Analysis of Zero email architecture with recommendations
-2. **`DESIGN.md`** - Technical design document for subscription tracker
-3. **`DECISIONS.md`** - Log of architectural decisions and trade-offs
+Based on technical design in `DESIGN.md`, the implementation is divided into 4 parallel workstreams:
 
-## Implementation Phases
+### Week 1: Foundation & Infrastructure
+**Target**: Core project setup and database foundation
+- Next.js 14 project setup with TypeScript
+- PostgreSQL + Prisma schema implementation
+- Docker Compose configuration
+- Basic authentication framework
+- Environment configuration
 
-### Foundation (Based on Discovery)
-- Set up project structure informed by Zero's architecture
-- Implement Gmail integration adapted from Zero's approach
-- Create database schema combining Zero's email tables + subscription needs
+### Week 2: Gmail Integration & Processing Pipeline  
+**Target**: Email fetching and batch processing
+- Gmail OAuth 2.0 integration
+- Gmail API service (on-demand fetching)
+- Batch processing orchestrator
+- Daily cron scheduler setup
+- Email processing log system
 
-### Core Processing
-- Build email processing pipeline (simplified from Zero)
-- Add LLM classification layer
-- Create subscription data extraction
+### Week 3: LLM Integration & Subscription Detection
+**Target**: Core business logic
+- OpenAI API integration
+- Subscription detection service
+- Deduplication logic
+- Confidence scoring system
+- Category classification
 
-### Interface
-- Dashboard for subscription insights
-- Management capabilities
+### Week 4: Dashboard & User Interface
+**Target**: Complete user experience
+- Next.js dashboard components
+- Subscription list with search/filter
+- Manual sync controls with progress tracking
+- Edit/delete subscription functionality
+- CSV export capability
+- Error handling and validation
 
-### Deployment
-- Docker setup inspired by Zero's configuration
-- Self-hosting focus
+### Week 5: Polish & Production Ready
+**Target**: Deployment ready
+- Performance optimization
+- Security hardening
+- Documentation completion
+- Testing and bug fixes
+- Deployment verification
 
-## Key Questions to Answer During Discovery
-
-1. **Email Storage**: How much email data do we need to store? Just metadata or full content?
-2. **Processing**: Real-time or batch? How does Zero handle this?
-3. **Schema Design**: What's the minimal set of tables needed?
-4. **Authentication**: Can we simplify Zero's auth for single-user MVP?
-5. **Performance**: What are Zero's strategies for handling large email volumes?
-
-## Resources
-- Zero email codebase: `reference/zero-email/`
-- Focus areas:
-  - `src/db/schema.ts` - Database design
-  - `src/lib/driver/google.ts` - Gmail integration
-  - `docker-compose.*.yaml` - Deployment setup
-  - `src/routes/` - API structure
+## Implementation Status
+- **Discovery**: ✅ Completed
+- **Implementation**: 🚧 Ready to begin
+- **Team Assembly**: 🔄 In planning

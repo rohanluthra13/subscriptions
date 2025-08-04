@@ -46,7 +46,8 @@ export const subscriptions = pgTable('subscriptions', {
   detectedAt: timestamp('detected_at').default(sql`NOW()`),
   
   // Status and confidence
-  status: text('status').default('active'), // 'active', 'cancelled', 'paused', 'unknown'
+  status: text('status', { enum: ['active', 'inactive', 'paused', 'unknown'] }).default('active'),
+  renewalType: text('renewal_type', { enum: ['auto_renew', 'manual_renew', 'cancelled', 'free_tier', 'unknown'] }).default('auto_renew'),
   confidenceScore: decimal('confidence_score', { precision: 3, scale: 2 }), // 0.00 to 1.00
   
   // User modifications
@@ -60,6 +61,7 @@ export const subscriptions = pgTable('subscriptions', {
 }, (table) => ({
   userStatusIdx: index('idx_subscriptions_user_status').on(table.userId, table.status),
   nextBillingIdx: index('idx_subscriptions_next_billing').on(table.nextBillingDate).where(sql`${table.status} = 'active'`),
+  renewalTypeIdx: index('idx_subscriptions_renewal_type').on(table.renewalType),
 }));
 
 // Email processing log (prevent duplicate processing)

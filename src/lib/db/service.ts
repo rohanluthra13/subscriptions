@@ -20,6 +20,11 @@ import {
  */
 export class DatabaseService {
   
+  // Transaction support
+  async withTransaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
+    return await db.transaction(callback);
+  }
+  
   // Connection operations
   async createConnection(data: NewConnection): Promise<Connection> {
     const [connection] = await db.insert(connections)
@@ -77,6 +82,19 @@ export class DatabaseService {
       .from(subscriptions)
       .where(eq(subscriptions.userId, userId))
       .orderBy(desc(subscriptions.createdAt));
+  }
+
+  async batchSaveSubscriptions(subscriptionData: NewSubscription[]): Promise<Subscription[]> {
+    return await this.withTransaction(async (tx) => {
+      const results: Subscription[] = [];
+      for (const subscription of subscriptionData) {
+        const [saved] = await tx.insert(subscriptions)
+          .values(subscription)
+          .returning();
+        results.push(saved);
+      }
+      return results;
+    });
   }
 
   // Email processing operations

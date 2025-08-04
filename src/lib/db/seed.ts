@@ -1,6 +1,14 @@
-import { db } from './index';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import { users } from './schema';
 import { sql } from 'drizzle-orm';
+
+// Direct database connection for seeding (bypasses env validation)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const db = drizzle(pool, { schema: { users } });
 
 async function seed() {
   console.log('🌱 Seeding database...');
@@ -20,6 +28,8 @@ async function seed() {
   } catch (error) {
     console.error('❌ Error seeding database:', error);
     throw error;
+  } finally {
+    await pool.end();
   }
 }
 

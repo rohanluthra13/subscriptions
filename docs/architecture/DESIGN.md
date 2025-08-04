@@ -115,8 +115,9 @@ CREATE TABLE subscriptions (
   last_billing_date DATE,
   detected_at TIMESTAMP DEFAULT NOW(),
   
-  -- Status and confidence
-  status TEXT DEFAULT 'active', -- 'active', 'cancelled', 'paused', 'unknown'
+  -- Status and confidence  
+  status TEXT DEFAULT 'active', -- 'active', 'inactive', 'paused', 'unknown'
+  renewal_type TEXT DEFAULT 'auto_renew', -- 'auto_renew', 'manual_renew', 'cancelled', 'free_tier', 'unknown'
   confidence_score DECIMAL(3,2), -- 0.00 to 1.00
   
   -- User modifications
@@ -175,6 +176,7 @@ CREATE TABLE sync_jobs (
 -- Performance indexes
 CREATE INDEX idx_subscriptions_user_status ON subscriptions(user_id, status);
 CREATE INDEX idx_subscriptions_next_billing ON subscriptions(next_billing_date) WHERE status = 'active';
+CREATE INDEX idx_subscriptions_renewal_type ON subscriptions(renewal_type);
 CREATE INDEX idx_processed_emails_connection ON processed_emails(connection_id, processed_at);
 CREATE INDEX idx_processed_emails_gmail_id ON processed_emails(gmail_message_id);
 CREATE INDEX idx_sync_jobs_status ON sync_jobs(status, started_at);

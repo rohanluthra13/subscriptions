@@ -30,13 +30,14 @@ export class SubscriptionDetector {
       const subscription = await this.provider.detectSubscription(email);
       const processingTime = Date.now() - startTime;
       
-      const inputText = `${email.subject} ${email.sender} ${email.body}`;
+      // Build the actual prompt that was sent to calculate accurate cost
+      const inputText = this.buildPromptForCostEstimation(email);
       const outputText = JSON.stringify(subscription || {});
       const inputTokens = this.provider.estimateTokenUsage(inputText);
       const outputTokens = this.provider.estimateTokenUsage(outputText);
       
-      const costPerToken = this.estimateCostPerToken();
-      const estimatedCost = (inputTokens + outputTokens) * costPerToken;
+      // Use proper cost calculation with separate input/output rates
+      const estimatedCost = this.calculateCost(inputTokens, outputTokens);
       
       this.processedCount++;
       this.totalCost += estimatedCost;
@@ -137,15 +138,29 @@ export class SubscriptionDetector {
     this.totalCost = 0;
   }
 
-  private estimateCostPerToken(): number {
+  private calculateCost(inputTokens: number, outputTokens: number): number {
     const modelName = this.provider.getModelName();
-    const costPerThousandTokens: Record<string, number> = {
-      'gpt-4o-mini': 0.00015 + 0.0006,
-      'gpt-4o': 0.0025 + 0.01,
-      'gpt-4-turbo': 0.01 + 0.03,
+    const pricing = this.getModelPricing(modelName);
+    
+    const inputCost = (inputTokens / 1000) * pricing.inputPer1k;
+    const outputCost = (outputTokens / 1000) * pricing.outputPer1k;
+    
+    return inputCost + outputCost;
+  }
+
+  private getModelPricing(model: string): { inputPer1k: number; outputPer1k: number } {
+    const pricing: Record<string, { inputPer1k: number; outputPer1k: number }> = {
+      'gpt-4o-mini': { inputPer1k: 0.00015, outputPer1k: 0.0006 },
+      'gpt-4o': { inputPer1k: 0.0025, outputPer1k: 0.01 },
+      'gpt-4-turbo': { inputPer1k: 0.01, outputPer1k: 0.03 },
     };
     
-    const avgCostPer1k = costPerThousandTokens[modelName] || costPerThousandTokens['gpt-4o-mini'];
-    return avgCostPer1k / 1000;
+    return pricing[model] || pricing['gpt-4o-mini'];
+  }
+
+  private buildPromptForCostEstimation(email: EmailData): string {
+    // This should match the actual prompt structure used by the provider
+    // For now, we'll estimate based on the email content
+    return `From: ${email.sender}\nSubject: ${email.subject}\nBody: ${email.body.substring(0, 1500)}`;
   }
 }

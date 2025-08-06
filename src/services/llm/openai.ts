@@ -37,7 +37,13 @@ export class OpenAIProvider implements LLMProvider {
         });
       });
 
-      const result = JSON.parse(response.choices[0].message?.content || '{}') as LLMResponse;
+      // Add null checks for response structure
+      if (!response.choices || response.choices.length === 0 || !response.choices[0].message) {
+        console.error('Invalid OpenAI response structure');
+        return null;
+      }
+
+      const result = JSON.parse(response.choices[0].message.content || '{}') as LLMResponse;
       
       if (result.is_subscription && result.confidence_score >= env.LLM_CONFIDENCE_THRESHOLD) {
         return this.transformResponse(result, email);
@@ -64,13 +70,25 @@ export class OpenAIProvider implements LLMProvider {
 
 
   private transformResponse(response: LLMResponse, email: EmailData): SubscriptionData {
+    // Validate and parse date safely
+    let nextBillingDate: Date | undefined;
+    if (response.next_billing_date) {
+      const parsedDate = new Date(response.next_billing_date);
+      // Check if date is valid
+      if (!isNaN(parsedDate.getTime())) {
+        nextBillingDate = parsedDate;
+      } else {
+        console.warn(`Invalid date received: ${response.next_billing_date}`);
+      }
+    }
+
     return {
       vendor_name: response.vendor_name || 'Unknown Vendor',
       vendor_email: response.vendor_email || email.sender,
       amount: response.amount || undefined,
       currency: response.currency || 'USD',
       billing_cycle: response.billing_cycle || undefined,
-      next_billing_date: response.next_billing_date ? new Date(response.next_billing_date) : undefined,
+      next_billing_date: nextBillingDate,
       confidence_score: response.confidence_score,
       category: this.categorizeVendor(response.vendor_name || ''),
       status: 'active',

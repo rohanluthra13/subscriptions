@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, lt } from 'drizzle-orm';
 import { db } from './index';
 import { 
   users, 
@@ -151,6 +151,41 @@ export class DatabaseService {
       .where(eq(syncJobs.id, jobId))
       .limit(1);
     return job || null;
+  }
+
+  // Background worker support
+  async getAllActiveConnections(): Promise<Connection[]> {
+    return await db.select()
+      .from(connections)
+      .where(eq(connections.isActive, true))
+      .orderBy(desc(connections.lastSyncAt));
+  }
+
+  async getConnectionById(connectionId: string): Promise<Connection | null> {
+    const [connection] = await db.select()
+      .from(connections)
+      .where(eq(connections.id, connectionId))
+      .limit(1);
+    return connection || null;
+  }
+
+  async cleanupOldSyncJobs(daysOld: number): Promise<number> {
+    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+    
+    const result = await db.delete(syncJobs)
+      .where(and(
+        eq(syncJobs.status, 'completed'),
+        lt(syncJobs.completedAt, cutoffDate)
+      ))
+      .returning({ id: syncJobs.id });
+
+    console.log(`Cleaned up ${result.length} old sync jobs`);
+    return result.length;
+  }
+
+  // Expose db for complex queries in JobMonitor
+  get db() {
+    return db;
   }
 
   // Health check

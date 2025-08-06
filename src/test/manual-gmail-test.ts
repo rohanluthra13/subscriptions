@@ -26,7 +26,7 @@ async function testGmailService() {
     
     if (connection.length === 0) {
       console.log('❌ No active Gmail connection found');
-      console.log('   Complete OAuth flow first: POST http://localhost:3001/api/auth/gmail/connect');
+      console.log('   Complete OAuth flow first: POST http://localhost:3000/api/auth/gmail/connect');
       return;
     }
     

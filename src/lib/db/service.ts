@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, lt } from 'drizzle-orm';
+import { eq, and, desc, sql, lt, asc } from 'drizzle-orm';
 import { db } from './index';
 import { 
   users, 
@@ -77,11 +77,90 @@ export class DatabaseService {
     return existing || null;
   }
 
-  async getSubscriptions(userId: string = '1'): Promise<Subscription[]> {
-    return await db.select()
+  async getSubscriptions(filters: {
+    userId?: string;
+    status?: string;
+    category?: string;
+    search?: string;
+    sort?: 'amount' | 'date' | 'name';
+    order?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ items: Subscription[]; total: number }> {
+    const { 
+      userId = '1', 
+      status, 
+      category, 
+      search, 
+      sort = 'date', 
+      order = 'desc',
+      limit = 20,
+      offset = 0 
+    } = filters;
+
+    // Build where conditions
+    const conditions = [eq(subscriptions.userId, userId)];
+    
+    if (status) {
+      conditions.push(eq(subscriptions.status, status as any));
+    }
+    
+    if (category) {
+      conditions.push(eq(subscriptions.category, category));
+    }
+    
+    if (search) {
+      conditions.push(sql`${subscriptions.vendorName} ILIKE ${'%' + search + '%'}`);
+    }
+    
+    // Apply sorting
+    let orderBy;
+    if (sort === 'amount') {
+      orderBy = order === 'asc' ? asc(subscriptions.amount) : desc(subscriptions.amount);
+    } else if (sort === 'name') {
+      orderBy = order === 'asc' ? asc(subscriptions.vendorName) : desc(subscriptions.vendorName);
+    } else {
+      orderBy = order === 'asc' ? asc(subscriptions.detectedAt) : desc(subscriptions.detectedAt);
+    }
+    
+    // Get total count
+    const [{ count }] = await db.select({ count: sql<number>`count(*)` })
       .from(subscriptions)
-      .where(eq(subscriptions.userId, userId))
-      .orderBy(desc(subscriptions.createdAt));
+      .where(and(...conditions));
+    
+    // Get items with pagination
+    const items = await db.select()
+      .from(subscriptions)
+      .where(and(...conditions))
+      .orderBy(orderBy)
+      .limit(limit)
+      .offset(offset);
+    
+    return { items, total: count };
+  }
+
+  async getSubscriptionById(subscriptionId: string, userId: string = '1'): Promise<Subscription | null> {
+    const [subscription] = await db.select()
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.id, subscriptionId),
+        eq(subscriptions.userId, userId)
+      ))
+      .limit(1);
+    return subscription || null;
+  }
+
+  async updateSubscription(subscriptionId: string, data: Partial<NewSubscription>): Promise<Subscription> {
+    const [updated] = await db.update(subscriptions)
+      .set({ ...data, updatedAt: sql`NOW()` })
+      .where(eq(subscriptions.id, subscriptionId))
+      .returning();
+    return updated;
+  }
+
+  async deleteSubscription(subscriptionId: string): Promise<void> {
+    await db.delete(subscriptions)
+      .where(eq(subscriptions.id, subscriptionId));
   }
 
   async batchSaveSubscriptions(subscriptionData: NewSubscription[]): Promise<Subscription[]> {
@@ -146,6 +225,14 @@ export class DatabaseService {
   }
 
   async getSyncJobStatus(jobId: string) {
+    const [job] = await db.select()
+      .from(syncJobs)
+      .where(eq(syncJobs.id, jobId))
+      .limit(1);
+    return job || null;
+  }
+
+  async getSyncJob(jobId: string) {
     const [job] = await db.select()
       .from(syncJobs)
       .where(eq(syncJobs.id, jobId))

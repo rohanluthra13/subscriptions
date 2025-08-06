@@ -11,7 +11,12 @@ const envSchema = z.object({
 
   // OpenAI
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
-  OPENAI_MODEL: z.string().default('gpt-4'),
+  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  
+  // LLM Configuration
+  LLM_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
+  LLM_MAX_RETRIES: z.coerce.number().positive().default(3),
+  LLM_TIMEOUT_MS: z.coerce.number().positive().default(30000),
 
   // Application
   API_KEY: z.string().min(1, 'API_KEY is required'),

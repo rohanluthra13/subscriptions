@@ -15,7 +15,7 @@ interface SubscriptionFilters {
 
 const fetcher = (url: string) => fetch(url, {
   headers: {
-    'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+    'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'dev-key-123'
   }
 }).then(res => res.json());
 
@@ -51,7 +51,7 @@ export function useDeleteSubscription() {
       const response = await fetch(`/api/subscriptions/${id}`, {
         method: 'DELETE',
         headers: {
-          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'dev-key-123'
         }
       });
       

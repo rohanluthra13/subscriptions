@@ -298,4 +298,15 @@ export class GmailService {
     const response = await this.gmail.users.getProfile({ userId: 'me' });
     return response.data.emailAddress || '';
   }
+
+  /**
+   * Get user profile information for testing
+   */
+  async getUserProfile(): Promise<{ emailAddress: string; messagesTotal: number }> {
+    const response = await this.gmail.users.getProfile({ userId: 'me' });
+    return {
+      emailAddress: response.data.emailAddress || '',
+      messagesTotal: response.data.messagesTotal || 0
+    };
+  }
 }

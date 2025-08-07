@@ -22,7 +22,17 @@ RUN npm install
 # Generate Drizzle files
 RUN npm run db:generate
 
-# Build Next.js app
+# Build Next.js app with placeholder env vars for build time
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+ENV POSTGRES_PASSWORD=build
+ENV GOOGLE_CLIENT_ID=build
+ENV GOOGLE_CLIENT_SECRET=build
+ENV OPENAI_API_KEY=build
+ENV API_KEY=build
+ENV NEXTAUTH_URL=http://localhost:3000
+ENV NEXTAUTH_SECRET=build
+ARG NEXT_PUBLIC_API_KEY
+ENV NEXT_PUBLIC_API_KEY=$NEXT_PUBLIC_API_KEY
 RUN npm run build
 
 # Production image, copy all the files and run next

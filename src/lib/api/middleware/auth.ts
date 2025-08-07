@@ -1,13 +1,22 @@
 import { NextRequest } from 'next/server';
 import { ApiError, ErrorCode } from '../types/errors';
 
-const API_KEY = process.env.API_KEY || 'dev-key-123';
-
 export function authenticateRequest(request: NextRequest): void {
-  const apiKey = request.headers.get('x-api-key') || 
-                 request.nextUrl.searchParams.get('api_key');
+  // Use computed property access to avoid build-time inlining of env values
+  const configuredApiKey = ((process as any).env['API_KEY'] || (process as any).env['NEXT_PUBLIC_API_KEY'] || 'dev-key-123').trim();
+  const providedHeaderUpper = request.headers.get('X-API-Key');
+  const providedHeaderLower = request.headers.get('x-api-key');
+  const providedQuery = request.nextUrl.searchParams.get('api_key');
+  const apiKey = (providedHeaderUpper || providedHeaderLower || providedQuery || '').trim();
+  // Debug logs to trace auth issues
+  try {
+    console.log('[auth] URL:', request.nextUrl.pathname);
+    console.log('[auth] providedHeaderUpper:', providedHeaderUpper, '| providedHeaderLower:', providedHeaderLower, '| providedQuery:', providedQuery);
+    console.log('[auth] lengths -> provided:', apiKey.length, 'configured:', configuredApiKey.length);
+    console.log('[auth] equality ->', apiKey === configuredApiKey);
+  } catch {}
   
-  if (!apiKey || apiKey !== API_KEY) {
+  if (!apiKey || apiKey !== configuredApiKey) {
     throw new ApiError(
       ErrorCode.UNAUTHORIZED,
       'Invalid or missing API key',

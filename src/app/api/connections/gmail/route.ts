@@ -34,9 +34,12 @@ export const POST = createApiHandler(async (request: NextRequest) => {
   const response = successResponse(responseData, 'Gmail authorization URL generated');
   
   // Set state cookie for CSRF validation
+  // Use scheme-based secure flag so it works over http://localhost in production docker
+  const nextAuthUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  const isSecure = nextAuthUrl.startsWith('https://');
   response.cookies.set('oauth_state', state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax',
     maxAge: 60 * 10, // 10 minutes
     path: '/'

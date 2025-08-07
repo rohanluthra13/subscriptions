@@ -5,7 +5,7 @@ import useSWR from 'swr';
 const fetcher = async (url: string) => {
   const response = await fetch(url, {
     headers: {
-      'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+      'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'dev-key-123'
     }
   });
   const data = await response.json();

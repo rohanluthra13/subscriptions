@@ -11,7 +11,7 @@ function getDb() {
     pool = new Pool({
       user: 'postgres',
       password: process.env.POSTGRES_PASSWORD,
-      host: 'localhost',
+      host: process.env.DB_HOST || 'db',
       port: 5432,
       database: 'subscriptions',
       max: 10, // Maximum 10 connections for single-user MVP

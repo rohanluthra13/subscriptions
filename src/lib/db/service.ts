@@ -275,6 +275,7 @@ export class DatabaseService {
     return db;
   }
 
+
   // Health check
   async healthCheck(): Promise<boolean> {
     try {

@@ -25,7 +25,7 @@ export function GmailConnection() {
 
   const handleConnect = async () => {
     console.log('Connect button clicked!');
-    console.log('API Key being used:', process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123');
+    console.log('API Key being used:', process.env.NEXT_PUBLIC_API_KEY || 'dev-key-123');
     setIsConnecting(true);
     try {
       console.log('Sending request to /api/connections/gmail...');
@@ -33,7 +33,7 @@ export function GmailConnection() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'dev-key-123'
         },
         body: JSON.stringify({})
       });
@@ -113,7 +113,6 @@ export function GmailConnection() {
             {isConnecting ? 'Connecting...' : 'Connect Gmail'}
           </Button>
         )}
-        {!isConnected && console.log('Button should be rendered, isConnected:', isConnected)}
       </div>
       
       {isConnected && connection?.last_sync_at && (

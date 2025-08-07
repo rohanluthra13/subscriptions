@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Card } from '@/components/ui/card';
 import { GmailConnection } from '@/components/dashboard/gmail-connection';
 
@@ -9,7 +10,9 @@ export default function DashboardPage() {
         <p className="text-gray-600">Monitor your subscription spending and activity</p>
       </div>
       
-      <GmailConnection />
+      <Suspense fallback={<Card className="p-6"><div className="animate-pulse"><div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div><div className="h-4 bg-gray-200 rounded w-1/2"></div></div></Card>}>
+        <GmailConnection />
+      </Suspense>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6">

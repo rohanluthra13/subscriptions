@@ -25,7 +25,7 @@ export function encryptToken(token: string): string {
   // Create cipher with key and IV
   const cipher = crypto.createCipheriv(
     ALGORITHM,
-    Buffer.from(encryptionKey, 'base64').subarray(0, 32), // Ensure 32 bytes for AES-256
+    Buffer.from(encryptionKey, 'hex'), // 32-byte hex string
     iv
   );
 
@@ -60,7 +60,7 @@ export function decryptToken(encryptedToken: string): string {
   // Create decipher with key and IV
   const decipher = crypto.createDecipheriv(
     ALGORITHM,
-    Buffer.from(encryptionKey, 'base64').subarray(0, 32), // Ensure 32 bytes for AES-256
+    Buffer.from(encryptionKey, 'hex'), // 32-byte hex string
     iv
   );
 

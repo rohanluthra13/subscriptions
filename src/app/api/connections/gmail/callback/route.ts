@@ -1,17 +1,11 @@
-import { NextRequest } from 'next/server';
-import { redirect } from 'next/navigation';
+import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForTokens } from '@/lib/auth/google-oauth';
 import { encryptToken } from '@/lib/auth/token-manager';
-import { createGmailClientFromAuth, getUserEmail } from '@/lib/gmail/client';
+import { createGmailClientFromAuth, getUserEmail, getCurrentHistoryId } from '@/lib/gmail/client';
+import { createOAuth2Client } from '@/lib/auth/google-oauth';
 import { db } from '@/lib/db';
 import { connections } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { ApiError, ErrorCode } from '@/lib/api/types/errors';
-import type { CallbackResponse } from '@/lib/api/types/responses';
-
-// In-memory state store (should match the one in route.ts)
-// In production, this should be shared via Redis or database
-const stateStore = new Map<string, { timestamp: number; redirectUri?: string }>();
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -22,37 +16,47 @@ export async function GET(request: NextRequest) {
   // Handle OAuth errors
   if (error) {
     console.error('OAuth error:', error);
-    return redirect(`/?error=${encodeURIComponent(error)}`);
+    return NextResponse.redirect(
+      `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dashboard?error=oauth_denied`
+    );
   }
   
   if (!code || !state) {
-    return redirect('/?error=missing_parameters');
+    return NextResponse.redirect(
+      `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dashboard?error=missing_params`
+    );
   }
   
-  // Verify state for CSRF protection
-  const stateData = stateStore.get(state);
-  if (!stateData) {
-    return redirect('/?error=invalid_state');
-  }
-  
-  // Remove used state
-  stateStore.delete(state);
-  
-  // Check if state is expired (10 minutes)
-  if (Date.now() - stateData.timestamp > 10 * 60 * 1000) {
-    return redirect('/?error=state_expired');
+  // Verify state for CSRF protection using cookies
+  const storedState = request.cookies.get('oauth_state')?.value;
+  if (!storedState || storedState !== state) {
+    console.error('State mismatch - possible CSRF attack');
+    return NextResponse.redirect(
+      `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dashboard?error=invalid_state`
+    );
   }
   
   try {
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code);
     
-    // Create authenticated Gmail client to get user email
-    const oauth2Client = await import('@/lib/auth/google-oauth').then(m => 
-      m.createAuthenticatedClient(tokens.accessToken, tokens.refreshToken)
-    );
+    // Create Gmail client to get user info
+    const oauth2Client = createOAuth2Client();
+    oauth2Client.setCredentials({
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken
+    });
+    
     const gmail = createGmailClientFromAuth(oauth2Client);
     const userEmail = await getUserEmail(gmail);
+    
+    // Get initial history ID for incremental sync
+    let historyId: string | undefined;
+    try {
+      historyId = await getCurrentHistoryId(gmail);
+    } catch (error) {
+      console.log('Could not get history ID, will use date-based sync');
+    }
     
     // Check if connection already exists
     const existingConnection = await db
@@ -71,10 +75,11 @@ export async function GET(request: NextRequest) {
           accessToken: encryptToken(tokens.accessToken),
           refreshToken: encryptToken(tokens.refreshToken),
           tokenExpiry: tokens.tokenExpiry,
+          historyId: historyId,
           isActive: true,
           updatedAt: new Date(),
         })
-        .where(eq(connections.id, existingConnection[0].id))
+        .where(eq(connections.email, userEmail))
         .returning();
       
       connectionId = updated.id;
@@ -88,19 +93,29 @@ export async function GET(request: NextRequest) {
           accessToken: encryptToken(tokens.accessToken),
           refreshToken: encryptToken(tokens.refreshToken),
           tokenExpiry: tokens.tokenExpiry,
+          historyId: historyId,
           isActive: true,
         })
         .returning();
       
       connectionId = created.id;
+      console.log(`Created new connection for ${userEmail}, ID: ${connectionId}`);
     }
     
-    // Redirect to success page or custom redirect URI
-    const redirectUri = stateData.redirectUri || '/';
-    return redirect(`${redirectUri}?success=true&connection_id=${connectionId}`);
+    console.log(`Final connection ID: ${connectionId}`);
+    
+    // Clear the state cookie and redirect to dashboard
+    const response = NextResponse.redirect(
+      `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dashboard?success=true&connection=${connectionId}`
+    );
+    response.cookies.delete('oauth_state');
+    
+    return response;
     
   } catch (error) {
     console.error('OAuth callback error:', error);
-    return redirect(`/?error=${encodeURIComponent('Failed to connect Gmail')}`);
+    return NextResponse.redirect(
+      `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dashboard?error=callback_failed`
+    );
   }
 }

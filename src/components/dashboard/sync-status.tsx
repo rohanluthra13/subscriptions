@@ -6,7 +6,11 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (url: string) => fetch(url, {
+  headers: {
+    'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+  }
+}).then(res => res.json());
 
 export function SyncStatus() {
   const [isStartingSync, setIsStartingSync] = useState(false);
@@ -19,6 +23,11 @@ export function SyncStatus() {
     try {
       const response = await fetch('/api/sync/manual', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+        },
+        body: JSON.stringify({})
       });
       
       if (response.ok) {

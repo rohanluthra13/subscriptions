@@ -71,7 +71,14 @@ async function processManualSyncInBackground(
   syncOrchestrator: SyncOrchestrator
 ) {
   try {
+    console.log('Starting manual sync for connection:', connection.id);
     const result = await syncOrchestrator.processManualRefresh(connection);
+    
+    console.log('Manual sync completed:', {
+      jobId: result.jobId,
+      stats: result.stats,
+      processingTimeMs: result.processingTimeMs
+    });
     
     // Emit completion event
     jobProgressEmitter.emit(`complete:${result.jobId}`, {

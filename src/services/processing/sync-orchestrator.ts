@@ -37,7 +37,7 @@ export class SyncOrchestrator {
 
   async processOnboarding(connection: Connection): Promise<SyncResult> {
     return this.executeSync(connection, 'initial_sync', async (gmail) => {
-      return gmail.getHistoricalEmails({ months: 6 });
+      return gmail.getHistoricalEmails({ months: 1 });
     });
   }
 
@@ -51,9 +51,9 @@ export class SyncOrchestrator {
 
   async processManualRefresh(connection: Connection): Promise<SyncResult> {
     return this.executeSync(connection, 'manual_sync', async (gmail) => {
-      return gmail.getEmailsSince(
-        connection.lastSyncAt || new Date(Date.now() - 24 * 60 * 60 * 1000)
-      );
+      // For manual sync, always search last 30 days regardless of last sync
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      return gmail.getEmailsSince(thirtyDaysAgo);
     });
   }
 

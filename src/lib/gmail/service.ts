@@ -110,11 +110,11 @@ export class GmailService {
   }
 
   /**
-   * Get historical emails for onboarding (6 months default)
+   * Get historical emails for onboarding (30 days default)
    * Returns only message IDs for processing
    */
   async getHistoricalEmails(options: HistoricalEmailOptions = {}): Promise<string[]> {
-    const months = options.months || 6;
+    const months = options.months || 1;
     const since = getHistoricalDate(months);
     
     const query = buildGmailQuery({

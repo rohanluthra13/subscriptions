@@ -132,9 +132,14 @@ export function buildGmailQuery(options: {
 }): string {
   const parts: string[] = [];
   
-  // Default: exclude spam and trash
+  // Default: exclude spam, trash, and sent, but include all other emails
   if (!options.includeSpamTrash) {
-    parts.push('-in:spam', '-in:trash');
+    parts.push('-in:spam', '-in:trash', '-in:sent');
+  }
+  
+  // Search in all mail (includes inbox, archived, and labeled emails)
+  if (!options.additionalQuery?.includes('in:')) {
+    parts.push('in:anywhere');
   }
   
   // Add date filters
@@ -151,11 +156,6 @@ export function buildGmailQuery(options: {
   // Add any additional query terms
   if (options.additionalQuery) {
     parts.push(options.additionalQuery);
-  }
-  
-  // Default to inbox if no other location specified
-  if (!options.additionalQuery?.includes('in:')) {
-    parts.push('in:inbox');
   }
   
   return parts.join(' ');

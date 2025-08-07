@@ -25,12 +25,10 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
     throw new Error('Google OAuth credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
   }
 
-  const defaultRedirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/gmail/callback`;
-  
+  // Don't pass redirect_uri to constructor - let it be set in generateAuthUrl
   return new OAuth2Client(
     clientId,
-    clientSecret,
-    redirectUri || defaultRedirectUri
+    clientSecret
   );
 }
 
@@ -40,14 +38,31 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
  * @returns Authorization URL for user consent
  */
 export function generateAuthUrl(state: string): string {
-  const oauth2Client = createOAuth2Client();
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/connections/gmail/callback`;
   
-  return oauth2Client.generateAuthUrl({
-    access_type: 'offline', // Required for refresh token
+  console.log('Generating auth URL with:');
+  console.log('- Client ID:', clientId);
+  console.log('- Redirect URI:', redirectUri);
+  
+  // Create OAuth2Client with redirect URI
+  const oauth2Client = new OAuth2Client(
+    clientId,
+    clientSecret,
+    redirectUri
+  );
+  
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
     scope: GMAIL_SCOPES,
     state: state,
-    prompt: 'consent' // Force consent to ensure refresh token
+    prompt: 'consent'
   });
+  
+  console.log('Generated auth URL:', authUrl);
+  
+  return authUrl;
 }
 
 /**
@@ -56,7 +71,20 @@ export function generateAuthUrl(state: string): string {
  * @returns Access and refresh tokens
  */
 export async function exchangeCodeForTokens(code: string) {
-  const oauth2Client = createOAuth2Client();
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/connections/gmail/callback`;
+  
+  console.log('Exchanging code for tokens with:');
+  console.log('- Client ID:', clientId);
+  console.log('- Client Secret:', clientSecret ? '***' : 'NOT SET');
+  console.log('- Redirect URI:', redirectUri);
+  
+  const oauth2Client = new OAuth2Client(
+    clientId,
+    clientSecret,
+    redirectUri
+  );
   
   const { tokens } = await oauth2Client.getToken(code);
   

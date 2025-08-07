@@ -1,26 +1,57 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useConnection } from '@/hooks/use-connection';
+import { useSearchParams } from 'next/navigation';
 
 export function GmailConnection() {
-  const { connection, isConnected, isLoading, error } = useConnection();
+  const { connection, isConnected, isLoading, error, refresh } = useConnection();
   const [isConnecting, setIsConnecting] = useState(false);
+  const searchParams = useSearchParams();
+  
+  console.log('GmailConnection state:', { connection, isConnected, isLoading, error });
+  
+  // Check for OAuth success and refresh connection
+  useEffect(() => {
+    console.log('useEffect triggered, searchParams:', searchParams.toString());
+    if (searchParams.get('success') === 'true') {
+      console.log('OAuth success detected, refreshing connection...');
+      refresh();
+    }
+  }, [searchParams, refresh]);
 
   const handleConnect = async () => {
+    console.log('Connect button clicked!');
+    console.log('API Key being used:', process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123');
     setIsConnecting(true);
     try {
+      console.log('Sending request to /api/connections/gmail...');
       const response = await fetch('/api/connections/gmail', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+        },
+        body: JSON.stringify({})
       });
+      console.log('Response received:', response.status, response.statusText);
       const data = await response.json();
+      console.log('Response data:', data);
       
-      if (data.auth_url) {
-        window.location.href = data.auth_url;
+      if (!response.ok) {
+        console.error('Gmail connection error:', data);
+        console.error('Full error details:', JSON.stringify(data, null, 2));
+        throw new Error(data.error?.message || data.message || 'Failed to connect Gmail');
+      }
+      
+      if (data.data?.auth_url) {
+        console.log('Redirecting to:', data.data.auth_url);
+        window.location.href = data.data.auth_url;
+      } else {
+        console.error('No auth_url in response:', data);
       }
     } catch (error) {
       console.error('Failed to initiate Gmail connection:', error);
@@ -77,10 +108,12 @@ export function GmailConnection() {
             onClick={handleConnect} 
             disabled={isConnecting}
             className="bg-blue-600 hover:bg-blue-700"
+            type="button"
           >
             {isConnecting ? 'Connecting...' : 'Connect Gmail'}
           </Button>
         )}
+        {!isConnected && console.log('Button should be rendered, isConnected:', isConnected)}
       </div>
       
       {isConnected && connection?.last_sync_at && (

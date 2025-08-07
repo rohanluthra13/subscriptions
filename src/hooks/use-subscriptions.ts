@@ -13,7 +13,11 @@ interface SubscriptionFilters {
   offset?: number;
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (url: string) => fetch(url, {
+  headers: {
+    'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+  }
+}).then(res => res.json());
 
 export function useSubscriptions(filters: SubscriptionFilters = {}) {
   const params = new URLSearchParams();
@@ -29,9 +33,9 @@ export function useSubscriptions(filters: SubscriptionFilters = {}) {
   const { data, error, isLoading, mutate } = useSWR(url, fetcher);
   
   return {
-    subscriptions: data?.subscriptions || [],
-    total: data?.total || 0,
-    summary: data?.summary || { total_monthly: 0, total_yearly: 0, active_count: 0 },
+    subscriptions: data?.data?.subscriptions || [],
+    total: data?.data?.total || 0,
+    summary: data?.data?.summary || { total_monthly: 0, total_yearly: 0, active_count: 0 },
     isLoading,
     error,
     refresh: mutate,
@@ -46,6 +50,9 @@ export function useDeleteSubscription() {
     try {
       const response = await fetch(`/api/subscriptions/${id}`, {
         method: 'DELETE',
+        headers: {
+          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'your-secure-api-key-123'
+        }
       });
       
       if (!response.ok) {

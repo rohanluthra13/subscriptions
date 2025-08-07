@@ -40,7 +40,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center space-x-2">
             <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-xs font-medium">2</span>
-            <span className="text-sm text-gray-400">Sync your emails (will process last 6 months)</span>
+            <span className="text-sm text-gray-400">Sync your emails (will process last 30 days)</span>
           </div>
           <div className="flex items-center space-x-2">
             <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-xs font-medium">3</span>

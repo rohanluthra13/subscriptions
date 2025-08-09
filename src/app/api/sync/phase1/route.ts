@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { connections, processedEmails } from '@/lib/db/schema';
+import { connections, processedEmails, syncJobs } from '@/lib/db/schema';
 import { createGmailClient } from '@/lib/gmail/client';
 import { gmail_v1 } from 'googleapis';
 
@@ -84,6 +84,17 @@ export async function POST(request: NextRequest) {
 
     // Store metadata in database
     const storageResult = await storeEmailMetadata(emailMetadata, connection.id);
+
+    // Log sync job for audit trail
+    await db.insert(syncJobs).values({
+      connectionId: connection.id,
+      jobType: 'fetch_emails',
+      status: 'completed',
+      totalEmails: emailMetadata.length,
+      processedEmails: storageResult.newEmails,
+      startedAt: new Date(startTime),
+      completedAt: new Date()
+    });
 
     const response: Phase1Response = {
       success: true,

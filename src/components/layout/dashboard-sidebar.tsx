@@ -5,10 +5,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const navigation = [
-  { name: 'Overview', href: '/dashboard', icon: '📊' },
-  { name: 'Subscriptions', href: '/dashboard/subscriptions', icon: '💳' },
-  { name: 'Sync Status', href: '/dashboard/sync', icon: '🔄' },
-  { name: 'Export', href: '/dashboard/export', icon: '📤' },
+  { name: 'Mechanics', href: '/dashboard', icon: '⚙️' },
 ];
 
 export function DashboardSidebar() {

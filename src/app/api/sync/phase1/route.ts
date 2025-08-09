@@ -128,7 +128,7 @@ async function fetchEmailMetadata(gmail: gmail_v1.Gmail, limit: number) {
   const response = await gmail.users.messages.list({
     userId: 'me',
     maxResults: limit,
-    q: 'in:inbox -in:spam -in:trash' // Basic filtering
+    q: '-in:sent -in:spam -in:trash' // All received emails excluding sent, spam, trash
   });
 
   if (!response.data.messages) {

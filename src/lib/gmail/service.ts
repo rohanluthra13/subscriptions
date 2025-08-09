@@ -208,7 +208,6 @@ export class GmailService {
           this.gmail.users.history.list({
             userId: 'me',
             startHistoryId,
-            labelId: 'INBOX',
             pageToken
           })
         );

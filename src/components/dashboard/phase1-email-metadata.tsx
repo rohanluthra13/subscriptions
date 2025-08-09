@@ -313,9 +313,9 @@ export function Phase1EmailMetadata() {
                   <TableHead className="text-gray-900 font-semibold">Sender</TableHead>
                   {showClassified && (
                     <>
+                      <TableHead className="text-gray-900 font-semibold">Subscription</TableHead>
                       <TableHead className="text-gray-900 font-semibold">Vendor</TableHead>
                       <TableHead className="text-gray-900 font-semibold">Type</TableHead>
-                      <TableHead className="text-gray-900 font-semibold">Confidence</TableHead>
                     </>
                   )}
                   <TableHead className="text-gray-900 font-semibold">
@@ -335,6 +335,17 @@ export function Phase1EmailMetadata() {
                     {showClassified && (
                       <>
                         <TableCell>
+                          {email.isSubscription ? (
+                            <Badge className="bg-green-100 text-green-800 text-xs">
+                              Yes
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-gray-600 text-xs">
+                              No
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {email.vendor ? (
                             <Badge variant="outline" className="text-xs">
                               {email.vendor}
@@ -346,19 +357,6 @@ export function Phase1EmailMetadata() {
                         <TableCell>
                           {email.emailType ? (
                             <span className="text-sm text-gray-600">{email.emailType}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {email.confidenceScore !== null && email.confidenceScore !== undefined ? (
-                            <span className={`text-sm font-medium ${
-                              email.confidenceScore >= 0.8 ? 'text-green-600' : 
-                              email.confidenceScore >= 0.5 ? 'text-yellow-600' : 
-                              'text-red-600'
-                            }`}>
-                              {(email.confidenceScore * 100).toFixed(0)}%
-                            </span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}

@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
     // Build query conditions
     const conditions = [];
     if (onlyClassified) {
-      conditions.push(sql`${processedEmails.vendor} IS NOT NULL`);
+      conditions.push(sql`${processedEmails.classifiedAt} IS NOT NULL`);
     }
 
     // Get total count

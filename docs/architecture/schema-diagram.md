@@ -62,14 +62,15 @@ erDiagram
         text subject
         text sender
         timestamp received_at
-        timestamp fetched_at
-        boolean is_subscription
-        text vendor_name
-        text email_type
-        decimal classification_confidence
-        text subscription_id FK
-        text processing_error
         timestamp processed_at
+        boolean is_subscription
+        text subscription_id FK
+        decimal confidence_score
+        text processing_error
+        timestamp fetched_at
+        text vendor
+        text email_type
+        timestamp classified_at
     }
 
     sync_jobs {
@@ -142,10 +143,11 @@ erDiagram
   - `received_at`: When email was received
   - `fetched_at`: When metadata was fetched (Phase 1)
 - **Phase 2 Fields** (classification):
-  - **NEW:** `is_subscription`: Boolean from LLM classification
-  - **NEW:** `vendor_name`: Extracted vendor name
-  - **NEW:** `email_type`: 'signup', 'billing', 'cancellation', etc.
-  - **NEW:** `classification_confidence`: LLM confidence score
+  - `is_subscription`: Boolean from LLM classification (renamed from subscription_found)
+  - `vendor`: Extracted vendor name (Phase 2 addition)
+  - `email_type`: 'signup', 'billing', 'cancellation', etc. (Phase 2 addition)
+  - `confidence_score`: LLM confidence score (existing field)
+  - `classified_at`: When classification was completed (Phase 2 addition)
 - **Final Fields**:
   - `subscription_id`: Links to final subscription (if created)
   - `processing_error`: Error message if processing failed

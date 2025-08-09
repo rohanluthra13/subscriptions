@@ -20,6 +20,11 @@ interface EmailMetadata {
   sender: string;
   receivedAt: string;
   fetchedAt: string;
+  isSubscription?: boolean;
+  vendor?: string;
+  emailType?: string;
+  confidenceScore?: number;
+  classifiedAt?: string;
 }
 
 interface Phase1Response {
@@ -31,16 +36,30 @@ interface Phase1Response {
   message: string;
 }
 
+interface Phase2Response {
+  success: boolean;
+  emailsProcessed: number;
+  subscriptionsFound: number;
+  errors: number;
+  processingTimeMs: number;
+  message: string;
+}
+
 export function Phase1EmailMetadata() {
   const [isRunningPhase1, setIsRunningPhase1] = useState(false);
   const [phase1Result, setPhase1Result] = useState<Phase1Response | null>(null);
+  const [isRunningPhase2, setIsRunningPhase2] = useState(false);
+  const [phase2Result, setPhase2Result] = useState<Phase2Response | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [emailLimit, setEmailLimit] = useState(30);
+  const [showClassified, setShowClassified] = useState(false);
   
   const pageSize = 10;
   
   const { data: emailsData, error: emailsError, isLoading: emailsLoading, mutate: refreshEmails } = useSWR(
-    `/api/sync/phase1/emails?limit=${pageSize}&offset=${currentPage * pageSize}`,
+    showClassified 
+      ? `/api/sync/phase2?classified=true&limit=${pageSize}&offset=${currentPage * pageSize}`
+      : `/api/sync/phase1/emails?limit=${pageSize}&offset=${currentPage * pageSize}`,
     fetcher
   );
 
@@ -85,6 +104,50 @@ export function Phase1EmailMetadata() {
       });
     } finally {
       setIsRunningPhase1(false);
+    }
+  };
+
+  const handleRunPhase2 = async () => {
+    setIsRunningPhase2(true);
+    setPhase2Result(null);
+    
+    try {
+      const response = await fetch('/api/sync/phase2', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'dev-key-123'
+        },
+        body: JSON.stringify({ limit: emailLimit })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        setPhase2Result(result);
+        refreshEmails(); // Refresh the email list
+      } else {
+        setPhase2Result({
+          success: false,
+          emailsProcessed: 0,
+          subscriptionsFound: 0,
+          errors: 0,
+          processingTimeMs: 0,
+          message: result.error || 'Phase 2 failed'
+        });
+      }
+    } catch (error) {
+      console.error('Phase 2 failed:', error);
+      setPhase2Result({
+        success: false,
+        emailsProcessed: 0,
+        subscriptionsFound: 0,
+        errors: 0,
+        processingTimeMs: 0,
+        message: 'Network error during Phase 2'
+      });
+    } finally {
+      setIsRunningPhase2(false);
     }
   };
 
@@ -154,10 +217,71 @@ export function Phase1EmailMetadata() {
         )}
       </Card>
 
+      {/* Phase 2 Controls */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Phase 2: Email Classification</h3>
+            <p className="text-sm text-gray-600">
+              Classify emails using LLM to identify subscriptions
+            </p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Button
+              onClick={handleRunPhase2}
+              disabled={isRunningPhase2}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {isRunningPhase2 ? 'Classifying...' : 'Run Phase 2'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Phase 2 Results */}
+        {phase2Result && (
+          <div className={`p-4 rounded-md ${phase2Result.success ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <Badge className={phase2Result.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                  {phase2Result.success ? 'Success' : 'Failed'}
+                </Badge>
+                <p className="text-sm mt-1">{phase2Result.message}</p>
+              </div>
+              {phase2Result.success && (
+                <div className="text-right text-sm text-gray-600">
+                  <div>Processed: {phase2Result.emailsProcessed}</div>
+                  <div>Subscriptions: {phase2Result.subscriptionsFound}</div>
+                  {phase2Result.errors > 0 && <div>Errors: {phase2Result.errors}</div>}
+                  <div>Time: {phase2Result.processingTimeMs}ms</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* Email Metadata Table */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Fetched Email Metadata</h3>
+          <div className="flex items-center space-x-4">
+            <h3 className="text-lg font-semibold text-gray-900">Email Data</h3>
+            <div className="flex space-x-2">
+              <Button
+                variant={!showClassified ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setShowClassified(false); setCurrentPage(0); }}
+              >
+                Metadata
+              </Button>
+              <Button
+                variant={showClassified ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setShowClassified(true); setCurrentPage(0); }}
+              >
+                Classified
+              </Button>
+            </div>
+          </div>
           {emailsData && (
             <span className="text-sm text-gray-600">
               Total: {emailsData.total} emails
@@ -187,8 +311,16 @@ export function Phase1EmailMetadata() {
                 <TableRow>
                   <TableHead className="text-gray-900 font-semibold">Subject</TableHead>
                   <TableHead className="text-gray-900 font-semibold">Sender</TableHead>
-                  <TableHead className="text-gray-900 font-semibold">Received</TableHead>
-                  <TableHead className="text-gray-900 font-semibold">Fetched</TableHead>
+                  {showClassified && (
+                    <>
+                      <TableHead className="text-gray-900 font-semibold">Vendor</TableHead>
+                      <TableHead className="text-gray-900 font-semibold">Type</TableHead>
+                      <TableHead className="text-gray-900 font-semibold">Confidence</TableHead>
+                    </>
+                  )}
+                  <TableHead className="text-gray-900 font-semibold">
+                    {showClassified ? 'Classified' : 'Received'}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -200,11 +332,41 @@ export function Phase1EmailMetadata() {
                     <TableCell className="text-gray-800">
                       {truncateText(email.sender, 30)}
                     </TableCell>
+                    {showClassified && (
+                      <>
+                        <TableCell>
+                          {email.vendor ? (
+                            <Badge variant="outline" className="text-xs">
+                              {email.vendor}
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {email.emailType ? (
+                            <span className="text-sm text-gray-600">{email.emailType}</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {email.confidenceScore !== null && email.confidenceScore !== undefined ? (
+                            <span className={`text-sm font-medium ${
+                              email.confidenceScore >= 0.8 ? 'text-green-600' : 
+                              email.confidenceScore >= 0.5 ? 'text-yellow-600' : 
+                              'text-red-600'
+                            }`}>
+                              {(email.confidenceScore * 100).toFixed(0)}%
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell className="text-sm text-gray-600">
-                      {formatDate(email.receivedAt)}
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {formatDate(email.fetchedAt)}
+                      {formatDate(showClassified && email.classifiedAt ? email.classifiedAt : email.receivedAt)}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -276,6 +276,69 @@ export class DatabaseService {
   }
 
 
+  // Phase 2: Classification support
+  async getUnclassifiedEmails(connectionId: string, limit: number = 30) {
+    return await db.select()
+      .from(processedEmails)
+      .where(and(
+        eq(processedEmails.connectionId, connectionId),
+        sql`${processedEmails.vendor} IS NULL`
+      ))
+      .limit(limit);
+  }
+
+  async updateEmailClassification(
+    emailId: string,
+    classification: {
+      isSubscription: boolean;
+      vendor: string | null;
+      emailType: string | null;
+      confidenceScore: number;
+    }
+  ) {
+    await db.update(processedEmails)
+      .set({
+        isSubscription: classification.isSubscription,
+        vendor: classification.vendor,
+        emailType: classification.emailType,
+        confidenceScore: classification.confidenceScore.toString(),
+        classifiedAt: sql`NOW()`
+      })
+      .where(eq(processedEmails.id, emailId));
+  }
+
+  async getClassifiedEmails(filters: {
+    connectionId?: string;
+    isSubscription?: boolean;
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const { connectionId, isSubscription, limit = 20, offset = 0 } = filters;
+    
+    const conditions = [sql`${processedEmails.vendor} IS NOT NULL`];
+    
+    if (connectionId) {
+      conditions.push(eq(processedEmails.connectionId, connectionId));
+    }
+    
+    if (isSubscription !== undefined) {
+      conditions.push(eq(processedEmails.isSubscription, isSubscription));
+    }
+    
+    const [{ count }] = await db.select({ count: sql<number>`count(*)` })
+      .from(processedEmails)
+      .where(and(...conditions));
+    
+    const items = await db.select()
+      .from(processedEmails)
+      .where(and(...conditions))
+      .orderBy(desc(processedEmails.classifiedAt))
+      .limit(limit)
+      .offset(offset);
+    
+    return { items, total: count };
+  }
+
   // Health check
   async healthCheck(): Promise<boolean> {
     try {

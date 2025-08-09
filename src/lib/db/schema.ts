@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, decimal, date, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, decimal, date, index, varchar } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Users table (multi-user foundation, single-user implementation)
@@ -75,10 +75,14 @@ export const processedEmails = pgTable('processed_emails', {
   receivedAt: timestamp('received_at'),
   processedAt: timestamp('processed_at').default(sql`NOW()`),
   fetchedAt: timestamp('fetched_at').default(sql`NOW()`), // Added for Phase 1
-  subscriptionFound: boolean('subscription_found').default(false),
+  isSubscription: boolean('is_subscription').default(false), // Renamed from subscription_found
   subscriptionId: text('subscription_id').references(() => subscriptions.id, { onDelete: 'set null' }),
   confidenceScore: decimal('confidence_score', { precision: 3, scale: 2 }),
   processingError: text('processing_error'),
+  // Phase 2 fields
+  vendor: varchar('vendor', { length: 255 }),
+  emailType: varchar('email_type', { length: 100 }),
+  classifiedAt: timestamp('classified_at'),
 }, (table) => ({
   connectionIdx: index('idx_processed_emails_connection').on(table.connectionId, table.processedAt),
   gmailIdIdx: index('idx_processed_emails_gmail_id').on(table.gmailMessageId),

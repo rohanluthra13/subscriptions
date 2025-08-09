@@ -206,7 +206,7 @@ async function storeEmailMetadata(emailMetadata: any[], connectionId: string) {
         receivedAt: email.receivedAt,
         fetchedAt: new Date(),
         // Phase 1: No processing yet
-        subscriptionFound: false,
+        isSubscription: false,
         subscriptionId: null,
         confidenceScore: null,
         processingError: null

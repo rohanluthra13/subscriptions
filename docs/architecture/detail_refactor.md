@@ -29,7 +29,7 @@ This document outlines how to build a complete 5-phase email processing pipeline
 Each phase serves a distinct purpose and can be built/tested independently:
 
 **Phase 1**: Email Fetching - Get email metadata from Gmail
-**Phase 2**: Classification & Grouping - LLM analyzes each email and groups by vendor
+**Phase 2**: Email Classification - LLM analyzes each email and stores results
 **Phase 3**: Group Processing - Review/approve groups (auto-approve for MVP)
 **Phase 4**: Story Building - LLM analyzes grouped emails: "What's the subscription timeline?"
 **Phase 5**: Storage - Save final subscription records
@@ -90,45 +90,46 @@ ADD COLUMN fetched_at TIMESTAMP DEFAULT NOW();
 -- gmail_message_id, gmail_thread_id, subject, sender, received_at, fetched_at
 ```
 
-### Phase 2: Classification & Grouping
-**Goal**: Classify individual emails and group by vendor
+### Phase 2: Email Classification
+**Goal**: Add classification data to existing email metadata records
 
-#### Phase 2a: Content Fetch
+**Simple Workflow**:
 ```typescript
-POST /api/sync/phase2a { emailIds: string[] }
-→ Fetch full email content from Gmail
-→ Extract text body and headers
+POST /api/sync/phase2 { emailIds?: string[] }
+→ For each email from Phase 1:
+  1. Fetch full email content using Gmail API
+  2. Send content to LLM for classification
+  3. Store classification results in processed_emails table
+→ No content storage - just classification results
 ```
 
-#### Phase 2b: LLM Classification
-```typescript
-POST /api/sync/phase2b { emails: EmailData[] }
-→ Process each email through LLM
-→ Classify: subscription/not subscription
-→ Extract vendor name if subscription
-→ Store classifications
+**What Gets Added to Database**:
+```sql
+-- Add classification columns to existing processed_emails table:
+ALTER TABLE processed_emails 
+ADD COLUMN is_subscription BOOLEAN,
+ADD COLUMN vendor VARCHAR(255),
+ADD COLUMN email_type VARCHAR(100), -- 'billing', 'signup', 'cancellation', etc.
+ADD COLUMN confidence DECIMAL(3,2), -- 0.00 to 1.00
+ADD COLUMN classified_at TIMESTAMP;
 ```
 
-#### Phase 2c: Simple Grouping
-```typescript
-POST /api/sync/phase2c
-→ Group emails by extracted vendor name
-→ Simple string matching (case-insensitive)
-→ Display groups in UI
-```
+**LLM Input/Output**:
+- **Input**: Email subject + body content
+- **Output**: `{ isSubscription: true, vendor: "Netflix", type: "billing", confidence: 0.9 }`
 
 **Implementation Tasks**:
-- ❌ Build Gmail get() integration for full content
-- ❌ Create LLM classification prompt
-- ❌ Implement vendor extraction logic
-- ❌ Build simple grouping algorithm
-- ❌ Create UI to show grouped emails
+- ❌ Build Gmail get() API integration for full email content
+- ❌ Create LLM classification prompt and API call
+- ❌ Add classification columns to processed_emails table
+- ❌ Create API endpoint for Phase 2 testing (`POST /api/sync/phase2`)
+- ❌ Update UI to display classification results
 
 **Manual Test Milestone**:
 - Classify 30 emails from Phase 1
-- Verify 70%+ accuracy on obvious subscriptions
-- Check vendor grouping (Netflix emails together)
-- Display groups in UI for verification
+- Verify 70%+ accuracy on obvious subscriptions (Netflix, Spotify, etc.)
+- Check vendor extraction works correctly
+- Display classification results in UI for verification
 
 ### Phase 3: Group Processing
 **Goal**: Process groups (auto-approve for MVP)
@@ -395,11 +396,12 @@ try {
 - [x] Pagination works for larger email sets
 - [x] Sync job audit logging working (tracks operations in sync_jobs table)
 
-### Phase 2 Success: Classification & Grouping
+### Phase 2 Success: Email Classification
 - [ ] Fetch full email content successfully
 - [ ] LLM classifies with 70%+ accuracy
 - [ ] Extract vendor names correctly
-- [ ] Group emails by vendor in UI
+- [ ] Store classification results in database
+- [ ] Display classification results in UI
 
 ### Phase 3 Success: Group Processing
 - [ ] All groups proceed to Phase 4

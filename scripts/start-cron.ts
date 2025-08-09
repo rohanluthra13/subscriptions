@@ -11,10 +11,11 @@
  *   npm run cron:dev (for development with file watching)
  */
 
-import { CronScheduler } from '../src/services/background/cron-scheduler';
+// TODO: Re-enable after Phase 1 complete
+// import { CronScheduler } from '../src/services/background/cron-scheduler';
 import { env } from '../src/lib/env';
 
-let scheduler: CronScheduler | null = null;
+// let scheduler: CronScheduler | null = null;
 
 async function startCronService() {
   console.log('🚀 Starting Subscription Tracker Background Worker');
@@ -26,11 +27,9 @@ async function startCronService() {
     console.log(`Database: ${env.DATABASE_URL.split('@')[1] || 'configured'}`);
     console.log(`Log Level: ${env.LOG_LEVEL}`);
     
-    // Initialize scheduler
-    scheduler = new CronScheduler();
-    
-    // Start all background tasks
-    scheduler.start();
+    // TODO: Re-enable after Phase 1 complete
+    console.log('⚠️ Cron scheduler disabled during Phase 1 development');
+    return;
     
     console.log('='.repeat(60));
     console.log('🎯 Background worker is running');
@@ -52,10 +51,10 @@ function setupGracefulShutdown() {
   const shutdown = (signal: string) => {
     console.log(`\n📡 Received ${signal}, shutting down gracefully...`);
     
-    if (scheduler) {
-      scheduler.stop();
-      console.log('✓ Background scheduler stopped');
-    }
+    // if (scheduler) {
+    //   scheduler.stop();
+    //   console.log('✓ Background scheduler stopped');
+    // }
     
     console.log('👋 Background worker shutdown complete');
     process.exit(0);
@@ -67,17 +66,17 @@ function setupGracefulShutdown() {
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
     console.error('💥 Uncaught exception:', error);
-    if (scheduler) {
-      scheduler.stop();
-    }
+    // if (scheduler) {
+    //   scheduler.stop();
+    // }
     process.exit(1);
   });
 
   process.on('unhandledRejection', (reason, promise) => {
     console.error('💥 Unhandled rejection at:', promise, 'reason:', reason);
-    if (scheduler) {
-      scheduler.stop();
-    }
+    // if (scheduler) {
+    //   scheduler.stop();
+    // }
     process.exit(1);
   });
 }
@@ -87,13 +86,9 @@ async function main() {
   setupGracefulShutdown();
   await startCronService();
   
-  // Keep the process alive
+  // Keep the process alive (disabled during Phase 1)
   setInterval(() => {
-    const status = scheduler?.getTaskStatus();
-    if (status) {
-      const activeCount = Object.values(status).filter(Boolean).length;
-      console.log(`📊 Background worker health: ${activeCount}/${Object.keys(status).length} tasks active`);
-    }
+    console.log('📊 Background worker placeholder active');
   }, 5 * 60 * 1000); // Log health every 5 minutes
 }
 

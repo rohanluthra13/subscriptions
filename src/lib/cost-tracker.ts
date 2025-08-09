@@ -1,4 +1,4 @@
-import { CostMetrics } from '@/services/llm/types';
+import { CostMetrics } from '@/lib/types/llm';
 
 export interface CostTrackingEntry {
   timestamp: Date;

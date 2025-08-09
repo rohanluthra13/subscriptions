@@ -74,6 +74,7 @@ export const processedEmails = pgTable('processed_emails', {
   sender: text('sender'),
   receivedAt: timestamp('received_at'),
   processedAt: timestamp('processed_at').default(sql`NOW()`),
+  fetchedAt: timestamp('fetched_at').default(sql`NOW()`), // Added for Phase 1
   subscriptionFound: boolean('subscription_found').default(false),
   subscriptionId: text('subscription_id').references(() => subscriptions.id, { onDelete: 'set null' }),
   confidenceScore: decimal('confidence_score', { precision: 3, scale: 2 }),

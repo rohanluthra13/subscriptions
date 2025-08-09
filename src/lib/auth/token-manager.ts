@@ -23,9 +23,10 @@ export function encryptToken(token: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
   
   // Create cipher with key and IV
+  const keyBuffer = Buffer.from(encryptionKey, 'base64').subarray(0, 32); // Ensure exactly 32 bytes
   const cipher = crypto.createCipheriv(
     ALGORITHM,
-    Buffer.from(encryptionKey, 'hex'), // 32-byte hex string
+    keyBuffer,
     iv
   );
 
@@ -58,9 +59,10 @@ export function decryptToken(encryptedToken: string): string {
   const encrypted = parts[1];
 
   // Create decipher with key and IV
+  const keyBuffer = Buffer.from(encryptionKey, 'base64').subarray(0, 32); // Ensure exactly 32 bytes
   const decipher = crypto.createDecipheriv(
     ALGORITHM,
-    Buffer.from(encryptionKey, 'hex'), // 32-byte hex string
+    keyBuffer,
     iv
   );
 

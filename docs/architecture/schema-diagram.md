@@ -22,6 +22,8 @@ erDiagram
         text history_id
         timestamp last_sync_at
         boolean is_active
+        boolean is_syncing
+        int current_sync_phase
         timestamp created_at
         timestamp updated_at
     }
@@ -37,6 +39,7 @@ erDiagram
         text billing_cycle
         date next_billing_date
         date last_billing_date
+        date signup_date
         timestamp detected_at
         text status
         text renewal_type
@@ -44,6 +47,9 @@ erDiagram
         boolean user_verified
         text user_notes
         text category
+        jsonb story_timeline
+        text[] source_email_ids
+        boolean needs_review
         timestamp created_at
         timestamp updated_at
     }
@@ -56,11 +62,14 @@ erDiagram
         text subject
         text sender
         timestamp received_at
-        timestamp processed_at
-        boolean subscription_found
+        timestamp fetched_at
+        boolean is_subscription
+        text vendor_name
+        text email_type
+        decimal classification_confidence
         text subscription_id FK
-        decimal confidence_score
         text processing_error
+        timestamp processed_at
     }
 
     sync_jobs {
@@ -97,40 +106,54 @@ erDiagram
   - `email`: User's email address
   - `name`: User's display name
 
-#### `connections` Table
-- **Purpose**: Gmail OAuth connections and sync state
+#### `connections` Table  
+- **Purpose**: Gmail OAuth connections and 5-phase pipeline tracking
 - **Key Fields**:
   - `user_id`: Links to users table (defaults to '1')
   - `access_token`/`refresh_token`: Gmail API credentials
   - `history_id`: Gmail history ID for incremental sync
   - `last_sync_at`: Timestamp of last successful sync
+  - **NEW:** `is_syncing`: Boolean flag for active pipeline execution
+  - **NEW:** `current_sync_phase`: Tracks pipeline progress (1-5)
 
 #### `subscriptions` Table
-- **Purpose**: Core business data - detected subscriptions
+- **Purpose**: Final subscription records from Phase 5
 - **Key Fields**:
   - `vendor_name`: Service provider name
   - `amount`/`currency`: Billing amount
   - `billing_cycle`: 'monthly', 'yearly', 'weekly', 'one-time'
   - `next_billing_date`/`last_billing_date`: Important dates
+  - **NEW:** `signup_date`: When subscription started (from Phase 4 story)
   - `confidence_score`: LLM detection confidence (0.00-1.00)
-  - `status`: 'active', 'inactive', 'paused', 'unknown' (subscription access state)
-  - `renewal_type`: 'auto_renew', 'manual_renew', 'cancelled', 'free_tier', 'unknown' (billing behavior)
-  - `user_verified`: Whether user has confirmed the subscription
+  - `status`: 'active', 'inactive', 'paused', 'unknown'
+  - `renewal_type`: 'auto_renew', 'manual_renew', 'cancelled', 'free_tier', 'unknown'
+  - **NEW:** `story_timeline`: JSONB chronological events from Phase 4
+  - **NEW:** `source_email_ids`: Array linking back to processed_emails
+  - **NEW:** `needs_review`: Flag for manual user review
 
-### Processing Tables
+### Pipeline Tables
 
 #### `processed_emails` Table
-- **Purpose**: Prevent duplicate email processing
-- **Key Fields**:
+- **Purpose**: Track emails through all 5 phases of pipeline
+- **Phase 1 Fields** (metadata):
   - `gmail_message_id`: Unique Gmail message identifier
-  - `subscription_found`: Boolean flag for LLM detection
-  - `subscription_id`: Links to detected subscription (if any)
+  - `subject`: Email subject line
+  - `sender`: Email sender address
+  - `received_at`: When email was received
+  - `fetched_at`: When metadata was fetched (Phase 1)
+- **Phase 2 Fields** (classification):
+  - **NEW:** `is_subscription`: Boolean from LLM classification
+  - **NEW:** `vendor_name`: Extracted vendor name
+  - **NEW:** `email_type`: 'signup', 'billing', 'cancellation', etc.
+  - **NEW:** `classification_confidence`: LLM confidence score
+- **Final Fields**:
+  - `subscription_id`: Links to final subscription (if created)
   - `processing_error`: Error message if processing failed
 
 #### `sync_jobs` Table
-- **Purpose**: Track batch processing progress
+- **Purpose**: Track 5-phase pipeline execution progress
 - **Key Fields**:
-  - `job_type`: 'initial_sync', 'incremental_sync', 'manual_sync'
+  - `job_type`: 'phase1', 'phase2', 'complete_pipeline', 'manual_sync'
   - `status`: 'running', 'completed', 'failed', 'cancelled'
   - Progress counters: `total_emails`, `processed_emails`, `subscriptions_found`, `errors_count`
 
@@ -147,12 +170,20 @@ CREATE INDEX idx_sync_jobs_status ON sync_jobs(status, started_at);
 CREATE INDEX idx_connections_user_active ON connections(user_id, is_active);
 ```
 
-## Data Flow Relationships
+## 5-Phase Pipeline Data Flow
 
-1. **User Setup**: `users` → `connections` (OAuth flow)
-2. **Email Processing**: `connections` → `processed_emails` (batch processing)
-3. **Subscription Detection**: `processed_emails` → `subscriptions` (LLM detection)
-4. **Sync Tracking**: `connections` → `sync_jobs` (progress monitoring)
+1. **Phase 1 - Metadata**: `connections` → `processed_emails` (fetch email metadata)
+2. **Phase 2 - Classification**: Update `processed_emails` with LLM results (subscription/vendor)
+3. **Phase 3 - Grouping**: Group `processed_emails` by vendor_name (in-memory)
+4. **Phase 4 - Story Building**: Analyze groups with LLM (in-memory)
+5. **Phase 5 - Storage**: Create `subscriptions` records, link back to `processed_emails`
+
+## 5-Phase Pipeline Tracking
+
+- **Pipeline State**: `connections.is_syncing` and `connections.current_sync_phase`
+- **Email Progress**: `processed_emails` tracks each email through phases
+- **Job Monitoring**: `sync_jobs` provides overall progress and error handling
+- **Final Results**: `subscriptions` contains story-enhanced subscription data
 
 ## Subscription Status Model
 

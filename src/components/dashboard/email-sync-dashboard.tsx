@@ -55,9 +55,7 @@ export function EmailSyncDashboard() {
   const pageSize = 10;
   
   const { data: emailsData, error: emailsError, isLoading: emailsLoading, mutate: refreshEmails } = useSWR(
-    showClassified 
-      ? `/api/sync/phase2?classified=true&limit=${pageSize}&offset=${currentPage * pageSize}`
-      : `/api/sync/phase1/emails?limit=${pageSize}&offset=${currentPage * pageSize}`,
+    `/api/emails?classified=${showClassified}&limit=${pageSize}&offset=${currentPage * pageSize}`,
     fetcher
   );
 

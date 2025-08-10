@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { Card } from '@/components/ui/card';
 import { GmailConnection } from '@/components/dashboard/gmail-connection';
-import { Phase1EmailMetadata } from '@/components/dashboard/phase1-email-metadata';
+import { EmailSyncDashboard } from '@/components/dashboard/email-sync-dashboard';
 
 export default function DashboardPage() {
   return (
@@ -15,7 +15,7 @@ export default function DashboardPage() {
         <GmailConnection />
       </Suspense>
       
-      <Phase1EmailMetadata />
+      <EmailSyncDashboard />
     </div>
   );
 }

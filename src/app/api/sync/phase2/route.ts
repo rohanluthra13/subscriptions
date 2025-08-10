@@ -85,13 +85,13 @@ export async function POST(request: NextRequest) {
         ))
         .limit(limit);
     } else {
-      // Get unclassified emails (no vendor means not classified)
+      // Get unclassified emails (no classifiedAt means not classified)
       emailsToProcess = await db
         .select()
         .from(processedEmails)
         .where(and(
           eq(processedEmails.connectionId, connection.id),
-          isNull(processedEmails.vendor)
+          isNull(processedEmails.classifiedAt)
         ))
         .limit(limit);
     }

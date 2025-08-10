@@ -20,6 +20,8 @@ export const connections = pgTable('connections', {
   tokenExpiry: timestamp('token_expiry').notNull(),
   historyId: text('history_id'), // Gmail history ID for incremental sync
   lastSyncAt: timestamp('last_sync_at'),
+  fetchPageToken: text('fetch_page_token'), // Gmail pagination token for "Fetch Older"
+  oldestFetchedMessageId: text('oldest_fetched_message_id'), // Track position in email history
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').default(sql`NOW()`),
   updatedAt: timestamp('updated_at').default(sql`NOW()`),
@@ -83,9 +85,15 @@ export const processedEmails = pgTable('processed_emails', {
   vendor: varchar('vendor', { length: 255 }),
   emailType: varchar('email_type', { length: 100 }),
   classifiedAt: timestamp('classified_at'),
+  // Phase 2B fields - email body storage for subscriptions
+  emailBody: text('email_body'),
+  bodyStoredAt: timestamp('body_stored_at'),
 }, (table) => ({
   connectionIdx: index('idx_processed_emails_connection').on(table.connectionId, table.processedAt),
   gmailIdIdx: index('idx_processed_emails_gmail_id').on(table.gmailMessageId),
+  vendorIdx: index('idx_processed_emails_vendor').on(table.vendor),
+  classifiedIdx: index('idx_processed_emails_classified').on(table.classifiedAt),
+  subscriptionIdx: index('idx_processed_emails_is_subscription').on(table.isSubscription).where(sql`${table.isSubscription} = true`),
 }));
 
 // Batch processing jobs (track sync progress)

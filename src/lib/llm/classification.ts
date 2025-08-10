@@ -76,7 +76,6 @@ Some common emails that are not subscriptions are typically:
             }
           ],
           response_format: { type: 'json_object' },
-          temperature: 0.1,
         });
       });
 

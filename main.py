@@ -523,6 +523,8 @@ class WebServer(BaseHTTPRequestHandler):
             self.serve_dashboard()
         elif path.startswith('/fonts/'):
             self.serve_static_file(path)
+        elif path.startswith('/icons/'):
+            self.serve_static_file(path)
         elif path == '/auth/gmail':
             self.start_gmail_auth()
         elif path == '/auth/callback':
@@ -615,6 +617,20 @@ class WebServer(BaseHTTPRequestHandler):
                     min-width: 16px;
                     min-height: 14px;
                     margin-left: 2px;
+                    font-size: 12px;
+                    line-height: 1;
+                    background: #c0c0c0;
+                    color: #000;
+                    cursor: pointer;
+                }}
+                
+                .title-bar-controls button:hover {{
+                    background: #dfdfdf;
+                }}
+                
+                .title-bar-controls button:active {{
+                    background: #a0a0a0;
+                    box-shadow: inset 1px 1px #808080, inset -1px -1px #fff;
                 }}
                 
                 /* Window Body */
@@ -693,17 +709,123 @@ class WebServer(BaseHTTPRequestHandler):
                 /* Desktop Layout */
                 .desktop {{
                     min-height: 100vh;
-                    padding: 20px;
+                    position: relative;
+                    overflow: hidden;
+                    background: #008080;
+                }}
+                
+                .desktop-icons {{
+                    position: absolute;
+                    top: 20px;
+                    left: 20px;
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, 80px);
+                    gap: 20px;
+                    z-index: 10;
+                }}
+                
+                .desktop-icon {{
+                    width: 64px;
+                    height: 80px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    padding: 4px;
+                    border: 1px solid transparent;
+                    user-select: none;
+                }}
+                
+                .desktop-icon:hover {{
+                    background: rgba(255, 255, 255, 0.1);
+                    border: 1px dotted #fff;
+                }}
+                
+                .desktop-icon.selected {{
+                    background: rgba(0, 0, 128, 0.3);
+                    border: 1px dotted #fff;
+                }}
+                
+                .desktop-icon-image {{
+                    width: 32px;
+                    height: 32px;
+                    margin-bottom: 4px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                
+                .desktop-icon-image img {{
+                    width: 32px;
+                    height: 32px;
+                    image-rendering: pixelated;
+                    image-rendering: -moz-crisp-edges;
+                    image-rendering: crisp-edges;
+                }}
+                
+                .desktop-icon-label {{
+                    font-size: 10px;
+                    color: white;
+                    text-align: center;
+                    line-height: 1.2;
+                    text-shadow: 1px 1px 0px #000;
+                    max-width: 60px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }}
                 
                 .windows-container {{
-                    max-width: 1024px;
-                    margin: 0 auto;
+                    position: relative;
+                    width: 100%;
+                    height: 100vh;
+                }}
+                
+                /* Window positioning */
+                .window {{
+                    width: 500px;
+                    min-height: 200px;
+                    max-width: 90vw;
+                    display: none; /* Hidden by default */
+                }}
+                
+                /* Data viewer window (larger) */
+                .window:nth-child(3) {{
+                    width: 700px;
+                    min-height: 400px;
                 }}
             </style>
         </head>
         <body>
             <div class="desktop">
+                <!-- Desktop Icons -->
+                <div class="desktop-icons">
+                    <div class="desktop-icon" data-window="0">
+                        <div class="desktop-icon-image">
+                            <img src="/icons/settings.png" alt="Settings" />
+                        </div>
+                        <div class="desktop-icon-label">Gmail Connection</div>
+                    </div>
+                    <div class="desktop-icon" data-window="1">
+                        <div class="desktop-icon-image">
+                            <img src="/icons/mail.png" alt="Mail" />
+                        </div>
+                        <div class="desktop-icon-label">Email Sync</div>
+                    </div>
+                    <div class="desktop-icon" data-window="2">
+                        <div class="desktop-icon-image">
+                            <img src="/icons/chart.png" alt="Chart" />
+                        </div>
+                        <div class="desktop-icon-label">Subscription Data</div>
+                    </div>
+                    <div class="desktop-icon" data-action="reset">
+                        <div class="desktop-icon-image">
+                            <img src="/icons/trash.png" alt="Trash" />
+                        </div>
+                        <div class="desktop-icon-label">Reset Database</div>
+                    </div>
+                </div>
+                
                 <div class="windows-container">
                     
                     <!-- Gmail Connection Window -->
@@ -713,7 +835,7 @@ class WebServer(BaseHTTPRequestHandler):
                             <div class="title-bar-controls">
                                 <button aria-label="Minimize"></button>
                                 <button aria-label="Maximize"></button>
-                                <button aria-label="Close">×</button>
+                                <button aria-label="Close"></button>
                             </div>
                         </div>
                         <div class="window-body">
@@ -728,7 +850,7 @@ class WebServer(BaseHTTPRequestHandler):
                             <div class="title-bar-controls">
                                 <button aria-label="Minimize"></button>
                                 <button aria-label="Maximize"></button>
-                                <button aria-label="Close">×</button>
+                                <button aria-label="Close"></button>
                             </div>
                         </div>
                         <div class="window-body">
@@ -761,7 +883,7 @@ class WebServer(BaseHTTPRequestHandler):
                             <div class="title-bar-controls">
                                 <button aria-label="Minimize"></button>
                                 <button aria-label="Maximize"></button>
-                                <button aria-label="Close">×</button>
+                                <button aria-label="Close"></button>
                             </div>
                         </div>
                         <div class="window-body" style="padding: 0;">
@@ -807,6 +929,370 @@ class WebServer(BaseHTTPRequestHandler):
             </div>
                 
                 <script>
+                    // Window Management System
+                    class WindowManager {{
+                        constructor() {{
+                            this.windows = new Map();
+                            this.zIndex = 1000;
+                            this.activeWindow = null;
+                            this.initializeWindows();
+                        }}
+                        
+                        initializeWindows() {{
+                            const windows = document.querySelectorAll('.window');
+                            windows.forEach((window, index) => {{
+                                const id = `window-${{index}}`;
+                                window.id = id;
+                                window.style.position = 'absolute';
+                                window.style.zIndex = this.zIndex + index;
+                                
+                                // Set initial positions (staggered)
+                                window.style.left = `${{50 + (index * 30)}}px`;
+                                window.style.top = `${{50 + (index * 40)}}px`;
+                                
+                                // Store original dimensions for restore
+                                const rect = window.getBoundingClientRect();
+                                
+                                this.windows.set(id, {{
+                                    element: window,
+                                    isDragging: false,
+                                    startX: 0,
+                                    startY: 0,
+                                    initialX: 0,
+                                    initialY: 0,
+                                    isMinimized: false,
+                                    isMaximized: false,
+                                    originalWidth: window.style.width || `${{rect.width}}px`,
+                                    originalHeight: window.style.height || `${{rect.height}}px`,
+                                    originalLeft: `${{50 + (index * 30)}}px`,
+                                    originalTop: `${{50 + (index * 40)}}px`
+                                }});
+                                
+                                this.makeDraggable(window);
+                                this.addWindowControls(window);
+                            }});
+                        }}
+                        
+                        makeDraggable(windowElement) {{
+                            const titleBar = windowElement.querySelector('.title-bar');
+                            const windowData = this.windows.get(windowElement.id);
+                            
+                            titleBar.style.cursor = 'move';
+                            titleBar.style.userSelect = 'none';
+                            
+                            // Mouse down on title bar
+                            titleBar.addEventListener('mousedown', (e) => {{
+                                // Don't drag if clicking on window controls
+                                if (e.target.closest('.title-bar-controls')) return;
+                                
+                                this.startDrag(windowElement, e);
+                                e.preventDefault();
+                            }});
+                            
+                            // Bring window to front when clicked anywhere
+                            windowElement.addEventListener('mousedown', () => {{
+                                this.bringToFront(windowElement);
+                            }});
+                        }}
+                        
+                        startDrag(windowElement, e) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            const rect = windowElement.getBoundingClientRect();
+                            
+                            windowData.isDragging = true;
+                            windowData.startX = e.clientX - rect.left;
+                            windowData.startY = e.clientY - rect.top;
+                            windowData.initialX = rect.left;
+                            windowData.initialY = rect.top;
+                            
+                            this.bringToFront(windowElement);
+                            
+                            // Add global mouse move and up listeners
+                            document.addEventListener('mousemove', this.dragWindow.bind(this, windowElement));
+                            document.addEventListener('mouseup', this.stopDrag.bind(this, windowElement));
+                            
+                            // Prevent text selection during drag
+                            document.body.style.userSelect = 'none';
+                        }}
+                        
+                        dragWindow(windowElement, e) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            if (!windowData.isDragging) return;
+                            
+                            const newX = e.clientX - windowData.startX;
+                            const newY = e.clientY - windowData.startY;
+                            
+                            // Constrain to viewport
+                            const maxX = window.innerWidth - windowElement.offsetWidth;
+                            const maxY = window.innerHeight - windowElement.offsetHeight;
+                            
+                            const constrainedX = Math.max(0, Math.min(newX, maxX));
+                            const constrainedY = Math.max(0, Math.min(newY, maxY));
+                            
+                            windowElement.style.left = `${{constrainedX}}px`;
+                            windowElement.style.top = `${{constrainedY}}px`;
+                        }}
+                        
+                        stopDrag(windowElement, e) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            windowData.isDragging = false;
+                            
+                            // Remove global listeners
+                            document.removeEventListener('mousemove', this.dragWindow.bind(this, windowElement));
+                            document.removeEventListener('mouseup', this.stopDrag.bind(this, windowElement));
+                            
+                            // Re-enable text selection
+                            document.body.style.userSelect = '';
+                        }}
+                        
+                        bringToFront(windowElement) {{
+                            if (this.activeWindow === windowElement) return;
+                            
+                            this.zIndex += 1;
+                            windowElement.style.zIndex = this.zIndex;
+                            this.activeWindow = windowElement;
+                            
+                            // Update title bar appearance for active window
+                            this.updateWindowAppearance();
+                        }}
+                        
+                        updateWindowAppearance() {{
+                            // Reset all title bars to inactive
+                            document.querySelectorAll('.title-bar').forEach(titleBar => {{
+                                titleBar.style.background = 'linear-gradient(90deg, #808080, #c0c0c0)';
+                            }});
+                            
+                            // Make active window title bar blue
+                            if (this.activeWindow) {{
+                                const activeTitleBar = this.activeWindow.querySelector('.title-bar');
+                                activeTitleBar.style.background = 'linear-gradient(90deg, #000080, #1084d0)';
+                            }}
+                        }}
+                        
+                        addWindowControls(windowElement) {{
+                            const controls = windowElement.querySelector('.title-bar-controls');
+                            const buttons = controls.querySelectorAll('button');
+                            
+                            // Clear existing button content and add proper icons
+                            buttons[0].innerHTML = '_';  // Minimize
+                            buttons[1].innerHTML = '□';  // Maximize/Restore
+                            buttons[2].innerHTML = '×';  // Close
+                            
+                            // Add click handlers
+                            buttons[0].addEventListener('click', (e) => {{
+                                e.stopPropagation();
+                                this.minimizeWindow(windowElement);
+                            }});
+                            
+                            buttons[1].addEventListener('click', (e) => {{
+                                e.stopPropagation();
+                                this.toggleMaximize(windowElement);
+                            }});
+                            
+                            buttons[2].addEventListener('click', (e) => {{
+                                e.stopPropagation();
+                                this.closeWindow(windowElement);
+                            }});
+                        }}
+                        
+                        minimizeWindow(windowElement) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            
+                            if (windowData.isMinimized) {{
+                                // Restore window
+                                windowElement.style.display = 'block';
+                                windowData.isMinimized = false;
+                                this.bringToFront(windowElement);
+                            }} else {{
+                                // Minimize window
+                                windowElement.style.display = 'none';
+                                windowData.isMinimized = true;
+                                
+                                // If this was the active window, find next visible window
+                                if (this.activeWindow === windowElement) {{
+                                    this.activeWindow = null;
+                                    const visibleWindows = Array.from(this.windows.values())
+                                        .filter(w => !w.isMinimized && w.element !== windowElement);
+                                    if (visibleWindows.length > 0) {{
+                                        this.bringToFront(visibleWindows[visibleWindows.length - 1].element);
+                                    }}
+                                }}
+                            }}
+                        }}
+                        
+                        toggleMaximize(windowElement) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            
+                            if (windowData.isMaximized) {{
+                                // Restore window
+                                windowElement.style.width = windowData.originalWidth;
+                                windowElement.style.height = windowData.originalHeight;
+                                windowElement.style.left = windowData.originalLeft;
+                                windowElement.style.top = windowData.originalTop;
+                                windowData.isMaximized = false;
+                                
+                                // Update button icon
+                                const maximizeBtn = windowElement.querySelector('.title-bar-controls button:nth-child(2)');
+                                maximizeBtn.innerHTML = '□';
+                            }} else {{
+                                // Store current position before maximizing
+                                windowData.originalWidth = windowElement.style.width;
+                                windowData.originalHeight = windowElement.style.height;
+                                windowData.originalLeft = windowElement.style.left;
+                                windowData.originalTop = windowElement.style.top;
+                                
+                                // Maximize window
+                                windowElement.style.width = '100vw';
+                                windowElement.style.height = '100vh';
+                                windowElement.style.left = '0px';
+                                windowElement.style.top = '0px';
+                                windowData.isMaximized = true;
+                                
+                                // Update button icon
+                                const maximizeBtn = windowElement.querySelector('.title-bar-controls button:nth-child(2)');
+                                maximizeBtn.innerHTML = '❐';
+                            }}
+                            
+                            this.bringToFront(windowElement);
+                        }}
+                        
+                        closeWindow(windowElement) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            
+                            // Hide window with fade effect
+                            windowElement.style.opacity = '0';
+                            windowElement.style.transition = 'opacity 0.2s ease';
+                            
+                            setTimeout(() => {{
+                                windowElement.style.display = 'none';
+                                windowElement.style.opacity = '1';
+                                windowElement.style.transition = '';
+                                
+                                // If this was the active window, find next visible window
+                                if (this.activeWindow === windowElement) {{
+                                    this.activeWindow = null;
+                                    const visibleWindows = Array.from(this.windows.values())
+                                        .filter(w => w.element.style.display !== 'none' && w.element !== windowElement);
+                                    if (visibleWindows.length > 0) {{
+                                        this.bringToFront(visibleWindows[visibleWindows.length - 1].element);
+                                    }}
+                                }}
+                            }}, 200);
+                        }}
+                        
+                        // Method to reopen a closed window
+                        openWindow(windowElement) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            windowElement.style.display = 'block';
+                            windowData.isMinimized = false;
+                            this.bringToFront(windowElement);
+                        }}
+                    }}
+                    
+                    // Desktop Icon Manager
+                    class DesktopManager {{
+                        constructor(windowManager) {{
+                            this.windowManager = windowManager;
+                            this.selectedIcon = null;
+                            this.initializeDesktop();
+                        }}
+                        
+                        initializeDesktop() {{
+                            const icons = document.querySelectorAll('.desktop-icon');
+                            
+                            icons.forEach(icon => {{
+                                // Single click to select
+                                icon.addEventListener('click', (e) => {{
+                                    this.selectIcon(icon);
+                                    e.stopPropagation();
+                                }});
+                                
+                                // Double click to open
+                                icon.addEventListener('dblclick', (e) => {{
+                                    this.openIcon(icon);
+                                    e.stopPropagation();
+                                }});
+                            }});
+                            
+                            // Click on desktop to deselect all icons
+                            document.querySelector('.desktop').addEventListener('click', () => {{
+                                this.deselectAllIcons();
+                            }});
+                            
+                            // Keyboard support (Enter to open selected icon)
+                            document.addEventListener('keydown', (e) => {{
+                                if (e.key === 'Enter' && this.selectedIcon) {{
+                                    this.openIcon(this.selectedIcon);
+                                }}
+                            }});
+                        }}
+                        
+                        selectIcon(icon) {{
+                            this.deselectAllIcons();
+                            icon.classList.add('selected');
+                            this.selectedIcon = icon;
+                        }}
+                        
+                        deselectAllIcons() {{
+                            document.querySelectorAll('.desktop-icon').forEach(icon => {{
+                                icon.classList.remove('selected');
+                            }});
+                            this.selectedIcon = null;
+                        }}
+                        
+                        openIcon(icon) {{
+                            const windowIndex = icon.dataset.window;
+                            const action = icon.dataset.action;
+                            
+                            if (windowIndex !== undefined) {{
+                                // Open corresponding window
+                                const windowElement = document.querySelectorAll('.window')[parseInt(windowIndex)];
+                                if (windowElement && this.windowManager) {{
+                                    this.windowManager.openWindow(windowElement);
+                                }}
+                            }} else if (action === 'reset') {{
+                                // Handle reset database action
+                                if (confirm('Are you sure you want to reset the database? This will clear all subscription data and email history.')) {{
+                                    window.location.href = '/reset';
+                                }}
+                            }}
+                            
+                            this.deselectAllIcons();
+                        }}
+                    }}
+                    
+                    // Initialize window manager and desktop when page loads
+                    let windowManager, desktopManager;
+                    document.addEventListener('DOMContentLoaded', function() {{
+                        windowManager = new WindowManager();
+                        desktopManager = new DesktopManager(windowManager);
+                        showTab('all-emails');
+                    }});
+                    
+                    // Global helper functions for window management
+                    function reopenWindow(windowIndex) {{
+                        const windows = document.querySelectorAll('.window');
+                        if (windows[windowIndex] && windowManager) {{
+                            windowManager.openWindow(windows[windowIndex]);
+                        }}
+                    }}
+                    
+                    function minimizeAllWindows() {{
+                        if (windowManager) {{
+                            const windows = document.querySelectorAll('.window');
+                            windows.forEach(window => {{
+                                windowManager.minimizeWindow(window);
+                            }});
+                        }}
+                    }}
+                    
+                    function openFromDesktop(iconIndex) {{
+                        const icons = document.querySelectorAll('.desktop-icon');
+                        if (icons[iconIndex] && desktopManager) {{
+                            desktopManager.openIcon(icons[iconIndex]);
+                        }}
+                    }}
+                    
                     function syncEmails() {{
                         const count = document.getElementById('emailCount').value;
                         const direction = document.getElementById('syncDirection').value;
@@ -917,10 +1403,7 @@ class WebServer(BaseHTTPRequestHandler):
                         return html;
                     }}
                     
-                    // Initialize first tab on load
-                    document.addEventListener('DOMContentLoaded', function() {{
-                        showTab('all-emails');
-                    }});
+                    // Tab initialization is handled by WindowManager
                 </script>
         </body>
         </html>
@@ -1104,8 +1587,8 @@ class WebServer(BaseHTTPRequestHandler):
             # Remove leading slash and construct file path
             file_path = path[1:]  # Remove leading /
             
-            # Security check - only serve from fonts directory
-            if not file_path.startswith('fonts/'):
+            # Security check - only serve from fonts and icons directories
+            if not (file_path.startswith('fonts/') or file_path.startswith('icons/')):
                 self.send_error(403)
                 return
                 
@@ -1118,6 +1601,10 @@ class WebServer(BaseHTTPRequestHandler):
                 content_type = 'font/woff'
             elif file_path.endswith('.woff2'):
                 content_type = 'font/woff2'
+            elif file_path.endswith('.png'):
+                content_type = 'image/png'
+            elif file_path.endswith('.svg'):
+                content_type = 'image/svg+xml'
             else:
                 content_type = 'application/octet-stream'
                 

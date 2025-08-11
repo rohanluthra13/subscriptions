@@ -994,7 +994,7 @@ class WebServer(BaseHTTPRequestHandler):
                         <div class="desktop-icon-image">
                             <img src="/icons/chart.png" alt="Chart" />
                         </div>
-                        <div class="desktop-icon-label">Subscription Data</div>
+                        <div class="desktop-icon-label">Processing Data</div>
                     </div>
                     <div class="desktop-icon" data-action="reset">
                         <div class="desktop-icon-image">
@@ -1057,7 +1057,7 @@ class WebServer(BaseHTTPRequestHandler):
                     <!-- Data Viewer Window -->
                     <div class="window">
                         <div class="title-bar">
-                            <div class="title-bar-text">Subscription Data</div>
+                            <div class="title-bar-text">Processing Data</div>
                             <div class="title-bar-controls">
                                 <button aria-label="Minimize"></button>
                                 <button aria-label="Maximize"></button>
@@ -1076,10 +1076,6 @@ class WebServer(BaseHTTPRequestHandler):
                                             aria-selected="false" style="padding: 4px 12px; margin-right: 2px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff;">
                                         Classified Emails
                                     </button>
-                                    <button onclick="showTab('subscriptions')" id="subscriptions-tab"
-                                            aria-selected="false" style="padding: 4px 12px; margin-right: 2px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff;">
-                                        Subscriptions ({len(subscriptions)})
-                                    </button>
                                 </menu>
                             </div>
                             
@@ -1093,11 +1089,6 @@ class WebServer(BaseHTTPRequestHandler):
                                 <!-- Classified Emails Tab -->
                                 <div id="classified-content" class="tab-content" style="display: none;">
                                     <div id="classified-data" style="font-size: 11px;">Loading...</div>
-                                </div>
-                                
-                                <!-- Subscriptions Tab -->
-                                <div id="subscriptions-content" class="tab-content" style="display: none;">
-                                    {self.render_subscriptions(subscriptions)}
                                 </div>
                             </div>
                         </div>

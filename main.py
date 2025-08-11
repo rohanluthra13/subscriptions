@@ -587,6 +587,9 @@ class WebServer(BaseHTTPRequestHandler):
                     border-color: #ffffff #0a0a0a #0a0a0a #ffffff;
                     box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff;
                     margin-bottom: 20px;
+                    position: relative;
+                    min-width: 200px;
+                    min-height: 150px;
                 }}
                 
                 /* Title Bar */
@@ -794,6 +797,181 @@ class WebServer(BaseHTTPRequestHandler):
                     width: 700px;
                     min-height: 400px;
                 }}
+                
+                /* Taskbar */
+                .taskbar {{
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    height: 28px;
+                    background: #c0c0c0;
+                    border-top: 1px solid #ffffff;
+                    border-bottom: 1px solid #0a0a0a;
+                    box-shadow: inset 0 1px 0 #ffffff, inset 0 -1px 0 #0a0a0a;
+                    display: flex;
+                    align-items: center;
+                    font-family: "Pixelated MS Sans Serif", Arial;
+                    font-size: 11px;
+                    z-index: 1000;
+                }}
+                
+                .start-button {{
+                    height: 22px;
+                    padding: 2px 4px 2px 2px;
+                    margin: 2px;
+                    background: #c0c0c0;
+                    border: 1px solid;
+                    border-color: #ffffff #0a0a0a #0a0a0a #ffffff;
+                    box-shadow: inset 1px 1px 0 #dfdfdf, inset -1px -1px 0 #808080;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    font-family: "Pixelated MS Sans Serif", Arial;
+                    font-size: 11px;
+                    color: #000;
+                    font-weight: bold;
+                }}
+                
+                .start-button:hover {{
+                    background: #dfdfdf;
+                }}
+                
+                .start-button:active {{
+                    border-color: #0a0a0a #ffffff #ffffff #0a0a0a;
+                    box-shadow: inset -1px -1px 0 #dfdfdf, inset 1px 1px 0 #808080;
+                }}
+                
+                .task-buttons {{
+                    flex: 1;
+                    display: flex;
+                    margin: 0 4px;
+                    gap: 2px;
+                }}
+                
+                .task-button {{
+                    height: 22px;
+                    padding: 2px 8px;
+                    background: #c0c0c0;
+                    border: 1px solid;
+                    border-color: #ffffff #0a0a0a #0a0a0a #ffffff;
+                    box-shadow: inset 1px 1px 0 #dfdfdf, inset -1px -1px 0 #808080;
+                    cursor: pointer;
+                    font-family: "Pixelated MS Sans Serif", Arial;
+                    font-size: 11px;
+                    color: #000;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    min-width: 100px;
+                    max-width: 200px;
+                }}
+                
+                .task-button:hover {{
+                    background: #dfdfdf;
+                }}
+                
+                .task-button.active {{
+                    border-color: #0a0a0a #ffffff #ffffff #0a0a0a;
+                    box-shadow: inset -1px -1px 0 #dfdfdf, inset 1px 1px 0 #808080;
+                    background: #dfdfdf;
+                }}
+                
+                .system-tray {{
+                    height: 22px;
+                    margin: 2px;
+                    padding: 2px 6px;
+                    background: #c0c0c0;
+                    border: 1px inset #c0c0c0;
+                    display: flex;
+                    align-items: center;
+                }}
+                
+                .tray-clock {{
+                    font-family: "Pixelated MS Sans Serif", Arial;
+                    font-size: 11px;
+                    color: #000;
+                }}
+                
+                /* Add padding to desktop to avoid overlap with taskbar */
+                .desktop {{
+                    padding-bottom: 40px;
+                }}
+                
+                /* Window Resize Handles */
+                .resize-handle {{
+                    position: absolute;
+                    background: transparent;
+                }}
+                
+                .resize-handle.n {{
+                    top: 0;
+                    left: 8px;
+                    right: 8px;
+                    height: 4px;
+                    cursor: n-resize;
+                }}
+                
+                .resize-handle.s {{
+                    bottom: 0;
+                    left: 8px;
+                    right: 8px;
+                    height: 4px;
+                    cursor: s-resize;
+                }}
+                
+                .resize-handle.e {{
+                    top: 8px;
+                    right: 0;
+                    bottom: 8px;
+                    width: 4px;
+                    cursor: e-resize;
+                }}
+                
+                .resize-handle.w {{
+                    top: 8px;
+                    left: 0;
+                    bottom: 8px;
+                    width: 4px;
+                    cursor: w-resize;
+                }}
+                
+                .resize-handle.ne {{
+                    top: 0;
+                    right: 0;
+                    width: 8px;
+                    height: 8px;
+                    cursor: ne-resize;
+                }}
+                
+                .resize-handle.nw {{
+                    top: 0;
+                    left: 0;
+                    width: 8px;
+                    height: 8px;
+                    cursor: nw-resize;
+                }}
+                
+                .resize-handle.se {{
+                    bottom: 0;
+                    right: 0;
+                    width: 8px;
+                    height: 8px;
+                    cursor: se-resize;
+                }}
+                
+                .resize-handle.sw {{
+                    bottom: 0;
+                    left: 0;
+                    width: 8px;
+                    height: 8px;
+                    cursor: sw-resize;
+                }}
+                
+                /* Visual resize indicator (optional subtle border on hover) */
+                .window:hover .resize-handle {{
+                    background: rgba(0, 0, 0, 0.1);
+                }}
             </style>
         </head>
         <body>
@@ -928,6 +1106,20 @@ class WebServer(BaseHTTPRequestHandler):
                 </div>
             </div>
                 
+            <!-- Taskbar -->
+            <div class="taskbar">
+                <button class="start-button">
+                    <img src="/icons/settings.png" alt="Start" style="width: 16px; height: 16px; margin-right: 4px;" />
+                    Start
+                </button>
+                <div class="task-buttons" id="task-buttons">
+                    <!-- Task buttons will be dynamically added here -->
+                </div>
+                <div class="system-tray">
+                    <div class="tray-clock" id="tray-clock">12:00 PM</div>
+                </div>
+            </div>
+                
                 <script>
                     // Window Management System
                     class WindowManager {{
@@ -936,6 +1128,7 @@ class WebServer(BaseHTTPRequestHandler):
                             this.zIndex = 1000;
                             this.activeWindow = null;
                             this.initializeWindows();
+                            this.initializeTaskbar();
                         }}
                         
                         initializeWindows() {{
@@ -970,6 +1163,7 @@ class WebServer(BaseHTTPRequestHandler):
                                 
                                 this.makeDraggable(window);
                                 this.addWindowControls(window);
+                                this.addResizeHandles(window);
                             }});
                         }}
                         
@@ -1118,6 +1312,9 @@ class WebServer(BaseHTTPRequestHandler):
                                     }}
                                 }}
                             }}
+                            
+                            // Update taskbar button
+                            this.updateTaskButton(windowElement.id);
                         }}
                         
                         toggleMaximize(windowElement) {{
@@ -1186,6 +1383,148 @@ class WebServer(BaseHTTPRequestHandler):
                             windowElement.style.display = 'block';
                             windowData.isMinimized = false;
                             this.bringToFront(windowElement);
+                            this.updateTaskButton(windowElement.id);
+                        }}
+                        
+                        // Taskbar functionality
+                        initializeTaskbar() {{
+                            this.updateClock();
+                            setInterval(() => this.updateClock(), 1000);
+                        }}
+                        
+                        updateClock() {{
+                            const now = new Date();
+                            const timeString = now.toLocaleTimeString([], {{hour: '2-digit', minute:'2-digit'}});
+                            const clockElement = document.getElementById('tray-clock');
+                            if (clockElement) {{
+                                clockElement.textContent = timeString;
+                            }}
+                        }}
+                        
+                        createTaskButton(windowId, title) {{
+                            const taskButtons = document.getElementById('task-buttons');
+                            const button = document.createElement('button');
+                            button.className = 'task-button';
+                            button.id = `task-${{windowId}}`;
+                            button.textContent = title;
+                            button.addEventListener('click', () => {{
+                                this.restoreFromTaskbar(windowId);
+                            }});
+                            taskButtons.appendChild(button);
+                        }}
+                        
+                        removeTaskButton(windowId) {{
+                            const button = document.getElementById(`task-${{windowId}}`);
+                            if (button) {{
+                                button.remove();
+                            }}
+                        }}
+                        
+                        updateTaskButton(windowId) {{
+                            const button = document.getElementById(`task-${{windowId}}`);
+                            const windowData = this.windows.get(windowId);
+                            
+                            if (windowData.isMinimized) {{
+                                if (!button) {{
+                                    const titleElement = windowData.element.querySelector('.title-bar-text');
+                                    const title = titleElement ? titleElement.textContent : 'Window';
+                                    this.createTaskButton(windowId, title);
+                                }}
+                            }} else {{
+                                if (button) {{
+                                    button.remove();
+                                }}
+                            }}
+                        }}
+                        
+                        restoreFromTaskbar(windowId) {{
+                            const windowData = this.windows.get(windowId);
+                            if (windowData && windowData.isMinimized) {{
+                                this.minimizeWindow(windowData.element); // This will restore it
+                            }}
+                        }}
+                        
+                        // Window Resizing functionality
+                        addResizeHandles(windowElement) {{
+                            const handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+                            
+                            handles.forEach(direction => {{
+                                const handle = document.createElement('div');
+                                handle.className = `resize-handle ${{direction}}`;
+                                handle.style.zIndex = '1001';
+                                
+                                handle.addEventListener('mousedown', (e) => {{
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    this.startResize(e, windowElement, direction);
+                                }});
+                                
+                                windowElement.appendChild(handle);
+                            }});
+                        }}
+                        
+                        startResize(e, windowElement, direction) {{
+                            const windowData = this.windows.get(windowElement.id);
+                            if (windowData.isMaximized) return; // Don't allow resize when maximized
+                            
+                            const startX = e.clientX;
+                            const startY = e.clientY;
+                            const rect = windowElement.getBoundingClientRect();
+                            const startWidth = rect.width;
+                            const startHeight = rect.height;
+                            const startLeft = rect.left;
+                            const startTop = rect.top;
+                            
+                            const minWidth = 200;
+                            const minHeight = 150;
+                            const maxWidth = window.innerWidth - 50;
+                            const maxHeight = window.innerHeight - 100;
+                            
+                            const onMouseMove = (e) => {{
+                                const deltaX = e.clientX - startX;
+                                const deltaY = e.clientY - startY;
+                                
+                                let newWidth = startWidth;
+                                let newHeight = startHeight;
+                                let newLeft = startLeft;
+                                let newTop = startTop;
+                                
+                                // Calculate new dimensions based on resize direction
+                                if (direction.includes('e')) {{
+                                    newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + deltaX));
+                                }}
+                                if (direction.includes('w')) {{
+                                    const widthDelta = Math.max(minWidth - startWidth, Math.min(maxWidth - startWidth, -deltaX));
+                                    newWidth = startWidth + widthDelta;
+                                    newLeft = startLeft - widthDelta;
+                                }}
+                                if (direction.includes('s')) {{
+                                    newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + deltaY));
+                                }}
+                                if (direction.includes('n')) {{
+                                    const heightDelta = Math.max(minHeight - startHeight, Math.min(maxHeight - startHeight, -deltaY));
+                                    newHeight = startHeight + heightDelta;
+                                    newTop = startTop - heightDelta;
+                                }}
+                                
+                                // Apply new dimensions and position
+                                windowElement.style.width = `${{newWidth}}px`;
+                                windowElement.style.height = `${{newHeight}}px`;
+                                windowElement.style.left = `${{newLeft}}px`;
+                                windowElement.style.top = `${{newTop}}px`;
+                            }};
+                            
+                            const onMouseUp = () => {{
+                                document.removeEventListener('mousemove', onMouseMove);
+                                document.removeEventListener('mouseup', onMouseUp);
+                                document.body.style.cursor = '';
+                                windowElement.style.userSelect = '';
+                            }};
+                            
+                            document.addEventListener('mousemove', onMouseMove);
+                            document.addEventListener('mouseup', onMouseUp);
+                            document.body.style.cursor = getComputedStyle(e.target).cursor;
+                            windowElement.style.userSelect = 'none';
                         }}
                     }}
                     

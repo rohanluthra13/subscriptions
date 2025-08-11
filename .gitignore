@@ -4,12 +4,22 @@
 .pnp.js
 .yarn/install-state.gz
 
+# Reference TypeScript files (large builds)
+reference-typescript/node_modules/
+reference-typescript/.next/
+
 # Testing
 /coverage
 
 # Next.js
 /.next/
 /out/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+subscriptions.db
 
 # Production
 /build

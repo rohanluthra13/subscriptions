@@ -69,6 +69,7 @@ class SubscriptionManager:
                 token_expiry TIMESTAMP NOT NULL,
                 history_id TEXT,
                 last_sync_at TIMESTAMP,
+                fetch_page_token TEXT,
                 is_active BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
@@ -122,6 +123,13 @@ class SubscriptionManager:
         # Create default user if doesn't exist
         cursor.execute('INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)', 
                       ('1', 'user@example.com', 'Default User'))
+        
+        # Migration: Add fetch_page_token column if it doesn't exist
+        cursor.execute("PRAGMA table_info(connections)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'fetch_page_token' not in columns:
+            cursor.execute('ALTER TABLE connections ADD COLUMN fetch_page_token TEXT')
+            print("Added fetch_page_token column to connections table")
         
         conn.commit()
         conn.close()
@@ -212,24 +220,44 @@ class SubscriptionManager:
         list_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults={max_results}'
         
         if fetch_direction == 'older':
-            # Get oldest processed message to fetch older emails
+            # Get the stored page token for fetching older emails
             conn = self.get_db_connection()
             cursor = conn.cursor()
-            cursor.execute('''
-                SELECT gmail_message_id FROM processed_emails 
-                WHERE connection_id = ? 
-                ORDER BY received_at ASC 
-                LIMIT 1
-            ''', (connection_id,))
-            oldest_result = cursor.fetchone()
+            cursor.execute('SELECT fetch_page_token FROM connections WHERE id = ?', (connection_id,))
+            result = cursor.fetchone()
             conn.close()
             
-            if oldest_result:
-                # Use Gmail search to get messages older than the oldest processed
-                list_url += f'&q=before:{oldest_result[0]}'
+            if result and result[0]:
+                # Use the stored page token to get the next batch of older emails
+                list_url += f'&pageToken={result[0]}'
+                print(f"Fetching older emails using saved page token...")
+            else:
+                print("Fetching emails (no previous page token)...")
+        else:
+            # For recent emails, clear the page token to start fresh
+            conn = self.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE connections SET fetch_page_token = NULL WHERE id = ?', (connection_id,))
+            conn.commit()
+            conn.close()
+            print("Fetching recent emails (reset page token)...")
         
+        print(f"Gmail API URL: {list_url}")
         response = requests.get(list_url, headers=headers)
-        messages = response.json().get('messages', [])
+        response_data = response.json()
+        messages = response_data.get('messages', [])
+        next_page_token = response_data.get('nextPageToken')
+        print(f"Gmail API returned {len(messages)} messages")
+        
+        # Save the nextPageToken for future "older" fetches
+        if next_page_token:
+            conn = self.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE connections SET fetch_page_token = ? WHERE id = ?', 
+                          (next_page_token, connection_id))
+            conn.commit()
+            conn.close()
+            print(f"Saved page token for next older fetch")
         
         email_data = []
         for message in messages:
@@ -353,6 +381,7 @@ class SubscriptionManager:
             cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ?', 
                           (email['id'],))
             if cursor.fetchone():
+                print(f"  Skipping already processed: {email['subject'][:50]}")
                 continue
                 
             processed_count += 1

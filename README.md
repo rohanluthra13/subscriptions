@@ -48,7 +48,7 @@ A simplified, AI-agent-friendly subscription tracking application that automatic
    
    # OpenAI API
    OPENAI_API_KEY=sk-your-openai-api-key
-   OPENAI_MODEL=gpt-4o-mini
+   OPENAI_MODEL=gpt-5-nano
    
    # App settings
    LLM_CONFIDENCE_THRESHOLD=0.7

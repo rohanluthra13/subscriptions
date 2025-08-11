@@ -211,7 +211,7 @@ class SubscriptionManager:
         return access_token
 
     def fetch_gmail_messages(self, connection_id: str, max_results: int = 50, fetch_direction: str = 'recent'):
-        """Fetch Gmail messages"""
+        """Fetch Gmail messages using batch requests for efficiency"""
         access_token = self.get_valid_access_token(connection_id)
         
         headers = {'Authorization': f'Bearer {access_token}'}
@@ -247,7 +247,7 @@ class SubscriptionManager:
         response_data = response.json()
         messages = response_data.get('messages', [])
         next_page_token = response_data.get('nextPageToken')
-        print(f"Gmail API returned {len(messages)} messages")
+        print(f"Gmail API returned {len(messages)} message IDs")
         
         # Save the nextPageToken for future "older" fetches
         if next_page_token:
@@ -259,29 +259,276 @@ class SubscriptionManager:
             conn.close()
             print(f"Saved page token for next older fetch")
         
-        email_data = []
-        for message in messages:
-            # Get full message
-            msg_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{message["id"]}'
-            msg_response = requests.get(msg_url, headers=headers)
-            msg_data = msg_response.json()
-            
-            # Extract email details
-            headers_data = {h['name']: h['value'] for h in msg_data['payload'].get('headers', [])}
-            
-            # Get email body
-            body = self.extract_email_body(msg_data['payload'])
-            
-            email_data.append({
-                'id': message['id'],
-                'thread_id': msg_data['threadId'],
-                'subject': headers_data.get('Subject', ''),
-                'sender': headers_data.get('From', ''),
-                'date': headers_data.get('Date', ''),
-                'body': body
-            })
+        # Use threaded individual fetches for reliability and speed
+        email_data = self.threaded_fetch_messages(messages, headers)
         
         return email_data
+    
+    def threaded_fetch_messages(self, messages, headers):
+        """Fetch messages using concurrent threads for speed"""
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import time
+        
+        email_data = []
+        fetch_lock = threading.Lock()
+        
+        def fetch_single_message(message, index):
+            """Fetch a single message - thread worker function"""
+            try:
+                msg_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{message["id"]}'
+                msg_response = requests.get(msg_url, headers=headers, timeout=15)
+                
+                if msg_response.status_code == 429:
+                    # Rate limited - wait and retry once
+                    time.sleep(1)
+                    msg_response = requests.get(msg_url, headers=headers, timeout=15)
+                
+                if msg_response.status_code == 200:
+                    msg_data = msg_response.json()
+                    
+                    # Extract email details
+                    headers_list = msg_data['payload'].get('headers', [])
+                    msg_headers = {h['name']: h['value'] for h in headers_list if 'name' in h and 'value' in h}
+                    
+                    try:
+                        body = self.extract_email_body(msg_data['payload'])
+                    except Exception as e:
+                        print(f"      Warning: Error extracting body for email {index+1}: {e}")
+                        body = ""
+                    
+                    email_info = {
+                        'id': message['id'],
+                        'thread_id': msg_data.get('threadId', ''),
+                        'subject': msg_headers.get('Subject', ''),
+                        'sender': msg_headers.get('From', ''),
+                        'date': msg_headers.get('Date', ''),
+                        'body': body
+                    }
+                    
+                    # Thread-safe append
+                    with fetch_lock:
+                        email_data.append(email_info)
+                        if (index + 1) % 25 == 0:  # Progress every 25 emails
+                            print(f"    Progress: {index + 1}/{len(messages)} emails fetched...")
+                    
+                    return True
+                else:
+                    print(f"      Error fetching email {index+1}: HTTP {msg_response.status_code}")
+                    return False
+                    
+            except requests.exceptions.Timeout:
+                print(f"      Timeout fetching email {index+1}")
+                return False
+            except Exception as e:
+                print(f"      Error fetching email {index+1}: {e}")
+                return False
+        
+        # Use ThreadPoolExecutor for concurrent fetching
+        max_workers = min(10, len(messages))  # Limit concurrent requests
+        print(f"  Using {max_workers} concurrent threads to fetch {len(messages)} emails...")
+        
+        start_time = time.time()
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all fetch tasks
+            future_to_index = {
+                executor.submit(fetch_single_message, message, i): i 
+                for i, message in enumerate(messages)
+            }
+            
+            # Wait for completion
+            completed = 0
+            for future in as_completed(future_to_index):
+                completed += 1
+                # Progress updates handled in the worker function
+        
+        fetch_time = time.time() - start_time
+        print(f"  ✓ Threaded fetch complete: {len(email_data)}/{len(messages)} emails in {fetch_time:.1f}s")
+        print(f"    Average: {fetch_time/len(messages):.2f}s per email")
+        
+        return email_data
+    
+    def batch_fetch_messages(self, messages, headers):
+        """Fetch multiple messages efficiently using Gmail batch API"""
+        import uuid
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.application import MIMEApplication
+        
+        email_data = []
+        batch_size = 100  # Gmail allows up to 100 requests per batch
+        
+        for batch_start in range(0, len(messages), batch_size):
+            batch_end = min(batch_start + batch_size, len(messages))
+            batch_messages = messages[batch_start:batch_end]
+            
+            batch_num = batch_start//batch_size + 1
+            total_batches = (len(messages) + batch_size - 1) // batch_size
+            print(f"  Batch {batch_num}/{total_batches}: Fetching emails {batch_start+1}-{batch_end} of {len(messages)} total")
+            
+            # Create multipart request for batch
+            boundary = f"batch_{uuid.uuid4()}"
+            batch_body = ""
+            
+            for i, message in enumerate(batch_messages):
+                batch_body += f"--{boundary}\n"
+                batch_body += "Content-Type: application/http\n"
+                batch_body += f"Content-ID: <item{i}>\n\n"
+                batch_body += f"GET /gmail/v1/users/me/messages/{message['id']} HTTP/1.1\n\n"
+            
+            batch_body += f"--{boundary}--"
+            
+            # Send batch request - Gmail uses standard Google batch endpoint
+            batch_url = "https://www.googleapis.com/batch"
+            batch_headers = {
+                'Authorization': headers['Authorization'],
+                'Content-Type': f'multipart/mixed; boundary={boundary}'
+            }
+            
+            try:
+                batch_response = requests.post(batch_url, headers=batch_headers, data=batch_body, timeout=30)
+                
+                if batch_response.status_code == 200:
+                    # Parse multipart response
+                    try:
+                        responses = self.parse_batch_response(batch_response.text)
+                        print(f"    ✓ Batch successful: {len(responses)} emails returned")
+                    except Exception as parse_error:
+                        print(f"    ✗ Batch parsing error: {parse_error}")
+                        print(f"    → Response preview: {batch_response.text[:200]}...")
+                        responses = []
+                    
+                    for response_data in responses:
+                        if response_data:
+                            try:
+                                # Validate response has required fields
+                                if 'payload' not in response_data:
+                                    print(f"      Warning: Email response missing 'payload' field, skipping...")
+                                    continue
+                                    
+                                if 'id' not in response_data:
+                                    print(f"      Warning: Email response missing 'id' field, skipping...")
+                                    continue
+                                
+                                # Extract email details safely
+                                payload = response_data['payload']
+                                headers_list = payload.get('headers', [])
+                                msg_headers = {h['name']: h['value'] for h in headers_list if 'name' in h and 'value' in h}
+                                
+                                try:
+                                    body = self.extract_email_body(payload)
+                                except Exception as e:
+                                    print(f"      Warning: Error extracting body for email {response_data.get('id', 'unknown')}: {e}")
+                                    body = ""
+                                
+                                email_data.append({
+                                    'id': response_data['id'],
+                                    'thread_id': response_data.get('threadId', ''),
+                                    'subject': msg_headers.get('Subject', ''),
+                                    'sender': msg_headers.get('From', ''),
+                                    'date': msg_headers.get('Date', ''),
+                                    'body': body
+                                })
+                                
+                            except Exception as e:
+                                print(f"      Warning: Error processing email in batch: {e}")
+                                continue
+                else:
+                    print(f"    ✗ Batch failed (status {batch_response.status_code}), falling back to individual requests...")
+                    # Fall back to individual requests for this batch
+                    for message in batch_messages:
+                        try:
+                            msg_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{message["id"]}'
+                            msg_response = requests.get(msg_url, headers=headers, timeout=10)
+                            if msg_response.status_code == 200:
+                                msg_data = msg_response.json()
+                                msg_headers = {h['name']: h['value'] for h in msg_data['payload'].get('headers', [])}
+                                body = self.extract_email_body(msg_data['payload'])
+                                
+                                email_data.append({
+                                    'id': message['id'],
+                                    'thread_id': msg_data.get('threadId', ''),
+                                    'subject': msg_headers.get('Subject', ''),
+                                    'sender': msg_headers.get('From', ''),
+                                    'date': msg_headers.get('Date', ''),
+                                    'body': body
+                                })
+                        except Exception as e:
+                            print(f"Error fetching individual message: {e}")
+                            continue
+                            
+            except Exception as e:
+                print(f"    ✗ Batch request error: {e}")
+                print(f"    → Falling back to individual requests for batch {batch_num}...")
+                # Fall back to individual fetches for this batch
+                for message in batch_messages:
+                    try:
+                        msg_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{message["id"]}'
+                        msg_response = requests.get(msg_url, headers=headers, timeout=10)
+                        if msg_response.status_code == 200:
+                            msg_data = msg_response.json()
+                            msg_headers = {h['name']: h['value'] for h in msg_data['payload'].get('headers', [])}
+                            body = self.extract_email_body(msg_data['payload'])
+                            
+                            email_data.append({
+                                'id': message['id'],
+                                'thread_id': msg_data.get('threadId', ''),
+                                'subject': msg_headers.get('Subject', ''),
+                                'sender': msg_headers.get('From', ''),
+                                'date': msg_headers.get('Date', ''),
+                                'body': body
+                            })
+                    except Exception as e:
+                        print(f"Error fetching individual message: {e}")
+                        continue
+        
+        print(f"Successfully fetched {len(email_data)} emails")
+        return email_data
+    
+    def parse_batch_response(self, response_text):
+        """Parse multipart batch response from Gmail API"""
+        import json
+        import re
+        
+        responses = []
+        # Split by boundary markers - look for the actual boundary in response
+        boundary_match = re.search(r'boundary=([a-zA-Z0-9_-]+)', response_text)
+        if boundary_match:
+            boundary = boundary_match.group(1)
+            parts = response_text.split(f'--{boundary}')
+        else:
+            # Fallback: split by any batch boundary pattern
+            parts = re.split(r'--batch_[a-zA-Z0-9-]+', response_text)
+        
+        for part in parts:
+            if 'Content-Type: application/http' in part:
+                try:
+                    # Look for HTTP response (after the double newline)
+                    http_parts = part.split('\n\n', 2)
+                    if len(http_parts) >= 2:
+                        # Find JSON in the HTTP response body
+                        json_text = http_parts[-1].strip()
+                        
+                        # Clean up any extra newlines or boundaries
+                        json_text = re.sub(r'\n--.*$', '', json_text, flags=re.MULTILINE)
+                        json_text = json_text.strip()
+                        
+                        if json_text and json_text.startswith('{'):
+                            response_data = json.loads(json_text)
+                            # Validate it has required fields
+                            if 'id' in response_data and 'payload' in response_data:
+                                responses.append(response_data)
+                            else:
+                                print(f"      Warning: Response missing required fields: {list(response_data.keys())}")
+                        
+                except json.JSONDecodeError as e:
+                    print(f"      Warning: JSON decode error in batch response: {e}")
+                    continue
+                except Exception as e:
+                    print(f"      Warning: Error parsing batch response part: {e}")
+                    continue
+        
+        print(f"    Parsed {len(responses)} valid email responses from batch")
+        return responses
 
     def extract_email_body(self, payload):
         """Extract text content from Gmail message payload"""
@@ -365,68 +612,120 @@ class SubscriptionManager:
 
     def sync_emails(self, connection_id: str, max_results: int = 20, fetch_direction: str = 'recent'):
         """Main sync process - fetch emails and classify them"""
-        print(f"Starting email sync: {max_results} emails from {fetch_direction}...")
+        import time
+        start_time = time.time()
         
-        # Fetch emails from Gmail
+        print(f"\n{'='*60}")
+        print(f"STARTING EMAIL SYNC")
+        print(f"{'='*60}")
+        print(f"Request: {max_results} emails ({fetch_direction})")
+        print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*60}\n")
+        
+        # Phase 1: Fetch emails from Gmail
+        print(f"PHASE 1: Fetching emails from Gmail...")
+        fetch_start = time.time()
         emails = self.fetch_gmail_messages(connection_id, max_results, fetch_direction)
+        fetch_time = time.time() - fetch_start
+        print(f"✓ Fetched {len(emails)} emails in {fetch_time:.1f} seconds")
+        print(f"  Average: {fetch_time/len(emails):.2f} seconds per email\n" if emails else "\n")
+        
+        # Phase 2: Process and classify emails
+        print(f"PHASE 2: Processing and classifying emails...")
+        print(f"{'='*60}")
         
         conn = self.get_db_connection()
         cursor = conn.cursor()
         
         new_subscriptions = 0
         processed_count = 0
+        skipped_count = 0
+        error_count = 0
         
-        for email in emails:
+        for i, email in enumerate(emails, 1):
             # Check if already processed
             cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ?', 
                           (email['id'],))
             if cursor.fetchone():
-                print(f"  Skipping already processed: {email['subject'][:50]}")
+                skipped_count += 1
+                print(f"  [{i}/{len(emails)}] SKIP (already processed): {email['subject'][:50]}")
                 continue
-                
+            
             processed_count += 1
-            print(f"Processing email: {email['subject'][:50]}...")
+            print(f"  [{i}/{len(emails)}] PROCESSING: {email['subject'][:50]}")
             
             # Classify with LLM
+            classify_start = time.time()
             classification = self.classify_email_with_llm(f"Subject: {email['subject']}\nFrom: {email['sender']}\nBody: {email['body']}")
+            classify_time = time.time() - classify_start
             
-            # Insert processed email record
-            cursor.execute('''
-                INSERT INTO processed_emails 
-                (connection_id, gmail_message_id, subject, sender, received_at, 
-                 is_subscription, confidence_score, vendor)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                connection_id, email['id'], email['subject'], email['sender'],
-                datetime.now().isoformat(), classification['is_subscription'],
-                classification['confidence'], classification.get('vendor_name')
-            ))
+            # Show classification result
+            if classification['is_subscription']:
+                confidence_pct = classification['confidence'] * 100
+                print(f"       → SUBSCRIPTION DETECTED! {classification.get('vendor_name', 'Unknown')} ({confidence_pct:.0f}% confidence)")
+                print(f"         Time: {classify_time:.1f}s")
+            else:
+                print(f"       → Not a subscription (Time: {classify_time:.1f}s)")
             
-            # If it's a subscription with high confidence, create subscription record
-            if classification['is_subscription'] and classification['confidence'] >= self.confidence_threshold:
+            try:
+                # Insert processed email record
                 cursor.execute('''
-                    INSERT INTO subscriptions 
-                    (connection_id, vendor_name, vendor_email, amount, currency, 
-                     billing_cycle, confidence_score, category)
+                    INSERT INTO processed_emails 
+                    (connection_id, gmail_message_id, subject, sender, received_at, 
+                     is_subscription, confidence_score, vendor)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    connection_id,
-                    classification.get('vendor_name', 'Unknown'),
-                    classification.get('vendor_email'),
-                    classification.get('amount'),
-                    classification.get('currency', 'USD'),
-                    classification.get('billing_cycle'),
-                    classification['confidence'],
-                    classification.get('category')
+                    connection_id, email['id'], email['subject'], email['sender'],
+                    datetime.now().isoformat(), classification['is_subscription'],
+                    classification['confidence'], classification.get('vendor_name')
                 ))
                 
-                new_subscriptions += 1
-                print(f"  → Found subscription: {classification['vendor_name']}")
+                # If it's a subscription with high confidence, create subscription record
+                if classification['is_subscription'] and classification['confidence'] >= self.confidence_threshold:
+                    cursor.execute('''
+                        INSERT INTO subscriptions 
+                        (connection_id, vendor_name, vendor_email, amount, currency, 
+                         billing_cycle, confidence_score, category)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        connection_id,
+                        classification.get('vendor_name', 'Unknown'),
+                        classification.get('vendor_email'),
+                        classification.get('amount'),
+                        classification.get('currency', 'USD'),
+                        classification.get('billing_cycle'),
+                        classification['confidence'],
+                        classification.get('category')
+                    ))
+                    
+                    new_subscriptions += 1
+                    if classification.get('amount'):
+                        print(f"       ✓ Saved: ${classification['amount']} {classification.get('billing_cycle', 'Unknown cycle')}")
+                    else:
+                        print(f"       ✓ Saved to subscriptions")
+                        
+            except Exception as e:
+                error_count += 1
+                print(f"       ✗ ERROR saving to database: {e}")
         
         conn.commit()
         conn.close()
         
-        print(f"Sync complete: {processed_count} emails processed, {new_subscriptions} subscriptions found")
+        # Summary
+        total_time = time.time() - start_time
+        print(f"\n{'='*60}")
+        print(f"SYNC COMPLETE")
+        print(f"{'='*60}")
+        print(f"Total time: {total_time:.1f} seconds")
+        print(f"Emails fetched: {len(emails)}")
+        print(f"Emails processed: {processed_count}")
+        print(f"Emails skipped (duplicates): {skipped_count}")
+        print(f"Subscriptions found: {new_subscriptions}")
+        if error_count > 0:
+            print(f"Errors: {error_count}")
+        print(f"Average time per email: {total_time/len(emails):.2f}s" if emails else "No emails to process")
+        print(f"{'='*60}\n")
+        
         return {"processed": processed_count, "subscriptions": new_subscriptions}
 
     def get_subscriptions(self) -> List[Dict]:

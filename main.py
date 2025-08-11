@@ -521,6 +521,8 @@ class WebServer(BaseHTTPRequestHandler):
         
         if path == '/':
             self.serve_dashboard()
+        elif path.startswith('/fonts/'):
+            self.serve_static_file(path)
         elif path == '/auth/gmail':
             self.start_gmail_auth()
         elif path == '/auth/callback':
@@ -544,50 +546,265 @@ class WebServer(BaseHTTPRequestHandler):
         <html>
         <head>
             <title>Subscription Manager</title>
-            <script src="https://cdn.tailwindcss.com"></script>
             <style>
-                .card {{ background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-                .tab-button.active {{ border-color: #3b82f6; color: #2563eb; }}
-                .tab-button {{ border-color: transparent; color: #6b7280; }}
-                .tab-button:hover {{ color: #374151; }}
+                /* Windows 98 Theme - Adapted from 98.css */
+                
+                /* Font Faces */
+                @font-face {{
+                    font-family: "Pixelated MS Sans Serif";
+                    src: url(/fonts/ms_sans_serif.woff) format("woff");
+                    src: url(/fonts/ms_sans_serif.woff2) format("woff2");
+                    font-weight: 400;
+                }}
+                @font-face {{
+                    font-family: "Pixelated MS Sans Serif";
+                    src: url(/fonts/ms_sans_serif_bold.woff) format("woff");
+                    src: url(/fonts/ms_sans_serif_bold.woff2) format("woff2");
+                    font-weight: 700;
+                }}
+                
+                /* Base Styles */
+                * {{
+                    box-sizing: border-box;
+                }}
+                
+                body {{
+                    background: #008080;  /* Classic teal desktop */
+                    font-family: "Pixelated MS Sans Serif", Arial;
+                    font-size: 11px;
+                    color: #000;
+                    margin: 0;
+                    padding: 20px;
+                    -webkit-font-smoothing: none;
+                }}
+                
+                /* Window Component */
+                .window {{
+                    background: #c0c0c0;
+                    border: 2px solid;
+                    border-color: #ffffff #0a0a0a #0a0a0a #ffffff;
+                    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff;
+                    margin-bottom: 20px;
+                }}
+                
+                /* Title Bar */
+                .title-bar {{
+                    background: linear-gradient(90deg, #000080, #1084d0);
+                    padding: 3px 2px 3px 3px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-weight: bold;
+                    color: white;
+                }}
+                
+                .title-bar-text {{
+                    padding: 0 0 0 3px;
+                    font-weight: bold;
+                    color: white;
+                    letter-spacing: 0;
+                }}
+                
+                .title-bar-controls {{
+                    display: flex;
+                }}
+                
+                .title-bar-controls button {{
+                    padding: 0;
+                    display: block;
+                    min-width: 16px;
+                    min-height: 14px;
+                    margin-left: 2px;
+                }}
+                
+                /* Window Body */
+                .window-body {{
+                    margin: 8px;
+                }}
+                
+                /* Buttons */
+                button {{
+                    background: silver;
+                    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
+                    border: none;
+                    border-radius: 0;
+                    font-family: "Pixelated MS Sans Serif", Arial;
+                    font-size: 11px;
+                    padding: 6px 12px;
+                    min-width: 75px;
+                    min-height: 23px;
+                    outline: none;
+                }}
+                
+                button:active {{
+                    box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
+                    padding: 7px 11px 5px 13px;
+                }}
+                
+                button:focus {{
+                    outline: 1px dotted #000;
+                    outline-offset: -4px;
+                }}
+                
+                button:disabled {{
+                    color: #808080;
+                    text-shadow: 1px 1px 0 #fff;
+                }}
+                
+                /* Form Elements */
+                select, input[type="text"], input[type="email"], input[type="password"] {{
+                    background-color: #fff;
+                    box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+                    border: none;
+                    border-radius: 0;
+                    font-family: "Pixelated MS Sans Serif", Arial;
+                    font-size: 11px;
+                    padding: 3px 4px;
+                    height: 21px;
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                }}
+                
+                select {{
+                    padding-right: 32px;
+                    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 6H4v1h1v1h1v1h1v1h1V9h1V8h1V7h1V6z' fill='%23000'/%3E%3C/svg%3E");
+                    background-position: top 2px right 2px;
+                    background-repeat: no-repeat;
+                }}
+                
+                label {{
+                    display: inline-flex;
+                    align-items: center;
+                    margin-right: 8px;
+                }}
+                
+                /* Field Row */
+                .field-row {{
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 6px;
+                }}
+                
+                .field-row > * + * {{
+                    margin-left: 6px;
+                }}
+                
+                /* Desktop Layout */
+                .desktop {{
+                    min-height: 100vh;
+                    padding: 20px;
+                }}
+                
+                .windows-container {{
+                    max-width: 1024px;
+                    margin: 0 auto;
+                }}
             </style>
         </head>
-        <body class="bg-gray-100 min-h-screen">
-            <div class="container mx-auto px-4 py-8">
-                <h1 class="text-3xl font-bold mb-8">Subscription Manager</h1>
-                
-                <!-- Gmail Connection -->
-                <div class="card mb-8">
-                    <h2 class="text-xl font-semibold mb-4">Gmail Connection</h2>
-                    {self.render_connections(connections)}
-                </div>
-                
-                <!-- Sync Section -->
-                <div class="card mb-8">
-                    <h2 class="text-xl font-semibold mb-4">Email Sync</h2>
-                    <div class="space-y-4">
-                        <div class="flex items-center space-x-4">
-                            <label class="font-medium">Number of emails:</label>
-                            <select id="emailCount" class="border rounded px-3 py-1">
-                                <option value="5">5</option>
-                                <option value="30" selected>30</option>
-                                <option value="100">100</option>
-                                <option value="500">500</option>
-                            </select>
+        <body>
+            <div class="desktop">
+                <div class="windows-container">
+                    
+                    <!-- Gmail Connection Window -->
+                    <div class="window">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Gmail Connection</div>
+                            <div class="title-bar-controls">
+                                <button aria-label="Minimize"></button>
+                                <button aria-label="Maximize"></button>
+                                <button aria-label="Close">×</button>
+                            </div>
                         </div>
-                        <div class="flex items-center space-x-4">
-                            <label class="font-medium">Sync direction:</label>
-                            <select id="syncDirection" class="border rounded px-3 py-1">
-                                <option value="recent" selected>Most recent emails</option>
-                                <option value="older">Older emails (from last processed)</option>
-                            </select>
+                        <div class="window-body">
+                            {self.render_connections(connections)}
                         </div>
-                        <button onclick="syncEmails()" 
-                                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                            Sync Emails
-                        </button>
                     </div>
+                    
+                    <!-- Email Sync Window -->
+                    <div class="window">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Email Sync</div>
+                            <div class="title-bar-controls">
+                                <button aria-label="Minimize"></button>
+                                <button aria-label="Maximize"></button>
+                                <button aria-label="Close">×</button>
+                            </div>
+                        </div>
+                        <div class="window-body">
+                            <div class="field-row">
+                                <label for="emailCount">Number of emails:</label>
+                                <select id="emailCount">
+                                    <option value="5">5</option>
+                                    <option value="30" selected>30</option>
+                                    <option value="100">100</option>
+                                    <option value="500">500</option>
+                                </select>
+                            </div>
+                            <div class="field-row">
+                                <label for="syncDirection">Sync direction:</label>
+                                <select id="syncDirection">
+                                    <option value="recent" selected>Most recent emails</option>
+                                    <option value="older">Older emails (from last processed)</option>
+                                </select>
+                            </div>
+                            <div class="field-row" style="margin-top: 12px;">
+                                <button onclick="syncEmails()">Sync Emails</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Viewer Window -->
+                    <div class="window">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Subscription Data</div>
+                            <div class="title-bar-controls">
+                                <button aria-label="Minimize"></button>
+                                <button aria-label="Maximize"></button>
+                                <button aria-label="Close">×</button>
+                            </div>
+                        </div>
+                        <div class="window-body" style="padding: 0;">
+                            <!-- Tab Bar -->
+                            <div style="background: #c0c0c0; border-bottom: 1px solid #808080; padding: 2px 8px;">
+                                <menu role="tablist" style="margin: 0; padding: 0; list-style: none; display: flex; font-size: 11px;">
+                                    <button onclick="showTab('all-emails')" id="all-emails-tab" 
+                                            aria-selected="true" style="padding: 4px 12px; margin-right: 2px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff; border-bottom: none;">
+                                        All Emails
+                                    </button>
+                                    <button onclick="showTab('classified')" id="classified-tab"
+                                            aria-selected="false" style="padding: 4px 12px; margin-right: 2px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff;">
+                                        Classified Emails
+                                    </button>
+                                    <button onclick="showTab('subscriptions')" id="subscriptions-tab"
+                                            aria-selected="false" style="padding: 4px 12px; margin-right: 2px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff;">
+                                        Subscriptions ({len(subscriptions)})
+                                    </button>
+                                </menu>
+                            </div>
+                            
+                            <!-- Tab Content -->
+                            <div style="padding: 8px;">
+                                <!-- All Emails Tab -->
+                                <div id="all-emails-content" class="tab-content">
+                                    <div id="all-emails-data" style="font-size: 11px;">Loading...</div>
+                                </div>
+                                
+                                <!-- Classified Emails Tab -->
+                                <div id="classified-content" class="tab-content" style="display: none;">
+                                    <div id="classified-data" style="font-size: 11px;">Loading...</div>
+                                </div>
+                                
+                                <!-- Subscriptions Tab -->
+                                <div id="subscriptions-content" class="tab-content" style="display: none;">
+                                    {self.render_subscriptions(subscriptions)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                 </div>
+            </div>
                 
                 <script>
                     function syncEmails() {{
@@ -598,21 +815,23 @@ class WebServer(BaseHTTPRequestHandler):
                     
                     function showTab(tabName) {{
                         // Hide all tab contents
-                        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+                        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
                         
-                        // Remove active class from all tabs
-                        document.querySelectorAll('.tab-button').forEach(el => {{
-                            el.classList.remove('active', 'border-blue-500', 'text-blue-600');
-                            el.classList.add('border-transparent', 'text-gray-500');
+                        // Reset all tab buttons
+                        document.querySelectorAll('button[role="tab"], menu[role="tablist"] button').forEach(el => {{
+                            el.setAttribute('aria-selected', 'false');
+                            el.style.borderBottom = '1px solid #808080';
+                            el.style.marginTop = '0';
                         }});
                         
                         // Show selected tab content
-                        document.getElementById(tabName + '-content').classList.remove('hidden');
+                        document.getElementById(tabName + '-content').style.display = 'block';
                         
                         // Activate selected tab
                         const activeTab = document.getElementById(tabName + '-tab');
-                        activeTab.classList.add('active', 'border-blue-500', 'text-blue-600');
-                        activeTab.classList.remove('border-transparent', 'text-gray-500');
+                        activeTab.setAttribute('aria-selected', 'true');
+                        activeTab.style.borderBottom = 'none';
+                        activeTab.style.marginTop = '-1px';
                         
                         // Load email data if needed
                         if (tabName === 'all-emails') {{
@@ -632,72 +851,66 @@ class WebServer(BaseHTTPRequestHandler):
                                 document.getElementById(targetDiv).innerHTML = renderEmailTable(data, classifiedOnly);
                             }})
                             .catch(error => {{
-                                document.getElementById(targetDiv).innerHTML = '<p class=\"text-red-600\">Error loading emails</p>';
+                                document.getElementById(targetDiv).innerHTML = '<span style=\"color: red;\">Error loading emails</span>';
                             }});
                     }}
                     
                     function renderEmailTable(data, showClassified) {{
                         if (data.emails.length === 0) {{
-                            return '<p class=\"text-gray-500 text-center py-8\">No emails found. Try syncing first.</p>';
+                            return '<p style=\"text-align: center; color: #666; padding: 20px;\">No emails found. Try syncing first.</p>';
                         }}
                         
                         let html = `
-                            <div class=\"overflow-x-auto\">
-                                <table class=\"min-w-full divide-y divide-gray-200\">
-                                    <thead class=\"bg-gray-50\">
-                                        <tr>
-                                            <th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase\">Subject</th>
-                                            <th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase\">Sender</th>`;
+                            <table style=\"width: 100%; border-collapse: collapse; font-size: 11px;\">
+                                <thead>
+                                    <tr style=\"background: #c0c0c0;\">
+                                        <th style=\"border: 1px inset #c0c0c0; padding: 4px; text-align: left;\">Subject</th>
+                                        <th style=\"border: 1px inset #c0c0c0; padding: 4px; text-align: left;\">Sender</th>`;
                         
                         if (showClassified) {{
                             html += `
-                                            <th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase\">Subscription</th>
-                                            <th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase\">Vendor</th>
-                                            <th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase\">Confidence</th>`;
+                                        <th style=\"border: 1px inset #c0c0c0; padding: 4px; text-align: left;\">Subscription</th>
+                                        <th style=\"border: 1px inset #c0c0c0; padding: 4px; text-align: left;\">Vendor</th>
+                                        <th style=\"border: 1px inset #c0c0c0; padding: 4px; text-align: left;\">Confidence</th>`;
                         }}
                         
                         html += `
-                                            <th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase\">Received</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class=\"bg-white divide-y divide-gray-200\">`;
+                                        <th style=\"border: 1px inset #c0c0c0; padding: 4px; text-align: left;\">Received</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
                         
-                        data.emails.forEach(email => {{
+                        data.emails.forEach((email, index) => {{
                             const truncatedSubject = email.subject.length > 50 ? email.subject.substring(0, 50) + '...' : email.subject;
                             const truncatedSender = email.sender.length > 30 ? email.sender.substring(0, 30) + '...' : email.sender;
                             const receivedDate = new Date(email.received_at).toLocaleString();
+                            const bgColor = index % 2 === 0 ? '#ffffff' : '#f8f8f8';
                             
                             html += `
-                                <tr>
-                                    <td class=\"px-6 py-4 whitespace-nowrap font-medium text-gray-900\">${{truncatedSubject}}</td>
-                                    <td class=\"px-6 py-4 whitespace-nowrap text-gray-800\">${{truncatedSender}}</td>`;
+                                <tr style=\"background: ${{bgColor}};\">
+                                    <td style=\"border: 1px inset #c0c0c0; padding: 4px;\">${{truncatedSubject}}</td>
+                                    <td style=\"border: 1px inset #c0c0c0; padding: 4px;\">${{truncatedSender}}</td>`;
                             
                             if (showClassified) {{
                                 const isSubscription = email.is_subscription ? 'Yes' : 'No';
-                                const subscriptionClass = email.is_subscription ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600';
                                 const vendor = email.vendor || '-';
                                 const confidence = email.confidence_score ? (parseFloat(email.confidence_score) * 100).toFixed(1) + '%' : '-';
                                 
                                 html += `
-                                    <td class=\"px-6 py-4 whitespace-nowrap\">
-                                        <span class=\"px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${{subscriptionClass}}\">
-                                            ${{isSubscription}}
-                                        </span>
-                                    </td>
-                                    <td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-900\">${{vendor}}</td>
-                                    <td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-900\">${{confidence}}</td>`;
+                                    <td style=\"border: 1px inset #c0c0c0; padding: 4px;\">${{isSubscription}}</td>
+                                    <td style=\"border: 1px inset #c0c0c0; padding: 4px;\">${{vendor}}</td>
+                                    <td style=\"border: 1px inset #c0c0c0; padding: 4px;\">${{confidence}}</td>`;
                             }}
                             
                             html += `
-                                    <td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-600\">${{receivedDate}}</td>
+                                    <td style=\"border: 1px inset #c0c0c0; padding: 4px;\">${{receivedDate}}</td>
                                 </tr>`;
                         }});
                         
                         html += `
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class=\"mt-4 text-sm text-gray-600\">
+                                </tbody>
+                            </table>
+                            <div style=\"margin-top: 8px; font-size: 10px; color: #666;\">
                                 Total: ${{data.total}} emails
                             </div>`;
                         
@@ -709,42 +922,6 @@ class WebServer(BaseHTTPRequestHandler):
                         showTab('all-emails');
                     }});
                 </script>
-                
-                <!-- Email Data Tabs -->
-                <div class="card">
-                    <div class="border-b border-gray-200 mb-6">
-                        <nav class="-mb-px flex space-x-8">
-                            <button onclick="showTab('all-emails')" id="all-emails-tab" 
-                                    class="tab-button active py-2 px-1 border-b-2 font-medium text-sm">
-                                All Emails
-                            </button>
-                            <button onclick="showTab('classified')" id="classified-tab"
-                                    class="tab-button py-2 px-1 border-b-2 font-medium text-sm">
-                                Classified Emails
-                            </button>
-                            <button onclick="showTab('subscriptions')" id="subscriptions-tab"
-                                    class="tab-button py-2 px-1 border-b-2 font-medium text-sm">
-                                Subscriptions ({len(subscriptions)})
-                            </button>
-                        </nav>
-                    </div>
-                    
-                    <!-- All Emails Tab -->
-                    <div id="all-emails-content" class="tab-content">
-                        <div id="all-emails-data">Loading...</div>
-                    </div>
-                    
-                    <!-- Classified Emails Tab -->
-                    <div id="classified-content" class="tab-content hidden">
-                        <div id="classified-data">Loading...</div>
-                    </div>
-                    
-                    <!-- Subscriptions Tab -->
-                    <div id="subscriptions-content" class="tab-content hidden">
-                        {self.render_subscriptions(subscriptions)}
-                    </div>
-                </div>
-            </div>
         </body>
         </html>
         """
@@ -758,71 +935,65 @@ class WebServer(BaseHTTPRequestHandler):
         """Render Gmail connections section"""
         if not connections:
             return '''
-                <p class="text-gray-600 mb-4">No Gmail connection found.</p>
-                <a href="/auth/gmail" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+                <p style="margin-bottom: 12px;">No Gmail connection found.</p>
+                <button onclick="window.location.href='/auth/gmail';">
                     Connect Gmail
-                </a>
+                </button>
             '''
         
-        html = "<div class='space-y-4'>"
+        html = ""
         for conn in connections:
             status = "✅ Active" if conn['is_active'] else "❌ Inactive"
             last_sync = conn['last_sync_at'] if conn['last_sync_at'] else 'Never'
             html += f'''
-                <div class="flex justify-between items-center p-4 bg-gray-50 rounded">
-                    <div>
-                        <strong>{conn['email']}</strong>
-                        <span class="ml-4 text-sm text-gray-600">{status}</span>
+                <div style="border: 1px inset #c0c0c0; padding: 8px; margin-bottom: 8px; background: #f8f8f8;">
+                    <div style="font-weight: bold; margin-bottom: 4px;">{conn['email']}</div>
+                    <div style="font-size: 10px; color: #666;">
+                        Status: {status} | Last sync: {last_sync}
                     </div>
-                    <div class="text-sm text-gray-600">Last sync: {last_sync}</div>
                 </div>
             '''
-        html += "</div>"
         return html
 
     def render_subscriptions(self, subscriptions):
         """Render subscriptions table"""
         if not subscriptions:
-            return "<p class='text-gray-600'>No subscriptions found. Try syncing your emails first.</p>"
+            return '<p style="text-align: center; color: #666; padding: 20px;">No subscriptions found. Try syncing your emails first.</p>'
         
         html = '''
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Billing</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                <thead>
+                    <tr style="background: #c0c0c0;">
+                        <th style="border: 1px inset #c0c0c0; padding: 4px; text-align: left;">Vendor</th>
+                        <th style="border: 1px inset #c0c0c0; padding: 4px; text-align: left;">Amount</th>
+                        <th style="border: 1px inset #c0c0c0; padding: 4px; text-align: left;">Billing</th>
+                        <th style="border: 1px inset #c0c0c0; padding: 4px; text-align: left;">Status</th>
+                        <th style="border: 1px inset #c0c0c0; padding: 4px; text-align: left;">Confidence</th>
+                    </tr>
+                </thead>
+                <tbody>
         '''
         
-        for sub in subscriptions:
+        for i, sub in enumerate(subscriptions):
             amount = f"${sub['amount']} {sub['currency']}" if sub['amount'] else 'Unknown'
             billing = sub['billing_cycle'] or 'Unknown'
             confidence = f"{float(sub['confidence_score'] or 0):.1%}"
+            bgColor = '#ffffff' if i % 2 == 0 else '#f8f8f8'
             
             html += f'''
-                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="font-medium text-gray-900">{sub['vendor_name']}</div>
-                        <div class="text-sm text-gray-500">{sub['vendor_email'] or ''}</div>
+                <tr style="background: {bgColor};">
+                    <td style="border: 1px inset #c0c0c0; padding: 4px;">
+                        <div style="font-weight: bold;">{sub['vendor_name']}</div>
+                        <div style="font-size: 10px; color: #666;">{sub['vendor_email'] or ''}</div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{amount}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{billing}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                            {sub['status']}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{confidence}</td>
+                    <td style="border: 1px inset #c0c0c0; padding: 4px;">{amount}</td>
+                    <td style="border: 1px inset #c0c0c0; padding: 4px;">{billing}</td>
+                    <td style="border: 1px inset #c0c0c0; padding: 4px;">{sub['status']}</td>
+                    <td style="border: 1px inset #c0c0c0; padding: 4px;">{confidence}</td>
                 </tr>
             '''
         
-        html += '</tbody></table></div>'
+        html += '</tbody></table>'
         return html
 
     def start_gmail_auth(self):
@@ -926,6 +1097,41 @@ class WebServer(BaseHTTPRequestHandler):
         self.send_response(302)
         self.send_header('Location', '/?reset=1')
         self.end_headers()
+
+    def serve_static_file(self, path):
+        """Serve static files (fonts, etc.)"""
+        try:
+            # Remove leading slash and construct file path
+            file_path = path[1:]  # Remove leading /
+            
+            # Security check - only serve from fonts directory
+            if not file_path.startswith('fonts/'):
+                self.send_error(403)
+                return
+                
+            # Open and serve the file
+            with open(file_path, 'rb') as f:
+                content = f.read()
+                
+            # Determine content type
+            if file_path.endswith('.woff'):
+                content_type = 'font/woff'
+            elif file_path.endswith('.woff2'):
+                content_type = 'font/woff2'
+            else:
+                content_type = 'application/octet-stream'
+                
+            self.send_response(200)
+            self.send_header('Content-type', content_type)
+            self.send_header('Cache-Control', 'public, max-age=31536000')  # Cache fonts for 1 year
+            self.end_headers()
+            self.wfile.write(content)
+            
+        except FileNotFoundError:
+            self.send_error(404)
+        except Exception as e:
+            print(f"Error serving static file: {e}")
+            self.send_error(500)
 
 def create_handler(subscription_manager):
     """Create request handler with subscription manager"""

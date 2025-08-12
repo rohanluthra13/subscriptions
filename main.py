@@ -1382,12 +1382,40 @@ class WebServer(BaseHTTPRequestHandler):
                             <div style="padding: 8px;">
                                 <!-- All Emails Tab -->
                                 <div id="all-emails-content" class="tab-content">
-                                    <div id="all-emails-data" style="font-size: 11px;">Loading...</div>
+                                    <!-- Pagination Controls -->
+                                    <div id="all-emails-pagination" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                            <button onclick="changePage('all-emails', -1)" id="all-emails-prev" style="min-width: 60px;">◄ Prev</button>
+                                            <span id="all-emails-page-info" style="font-size: 11px; padding: 0 8px;">Page 1 of 1</span>
+                                            <button onclick="changePage('all-emails', 1)" id="all-emails-next" style="min-width: 60px;">Next ►</button>
+                                        </div>
+                                        <div style="font-size: 10px; color: #666;">
+                                            <span id="all-emails-total">0 emails total</span>
+                                        </div>
+                                    </div>
+                                    <!-- Scrollable Data Container -->
+                                    <div style="max-height: 300px; overflow-y: auto; border: 1px inset #c0c0c0; background: #fff;">
+                                        <div id="all-emails-data" style="font-size: 11px;">Loading...</div>
+                                    </div>
                                 </div>
                                 
                                 <!-- Classified Emails Tab -->
                                 <div id="classified-content" class="tab-content" style="display: none;">
-                                    <div id="classified-data" style="font-size: 11px;">Loading...</div>
+                                    <!-- Pagination Controls -->
+                                    <div id="classified-pagination" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                            <button onclick="changePage('classified', -1)" id="classified-prev" style="min-width: 60px;">◄ Prev</button>
+                                            <span id="classified-page-info" style="font-size: 11px; padding: 0 8px;">Page 1 of 1</span>
+                                            <button onclick="changePage('classified', 1)" id="classified-next" style="min-width: 60px;">Next ►</button>
+                                        </div>
+                                        <div style="font-size: 10px; color: #666;">
+                                            <span id="classified-total">0 emails total</span>
+                                        </div>
+                                    </div>
+                                    <!-- Scrollable Data Container -->
+                                    <div style="max-height: 300px; overflow-y: auto; border: 1px inset #c0c0c0; background: #fff;">
+                                        <div id="classified-data" style="font-size: 11px;">Loading...</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1956,18 +1984,77 @@ class WebServer(BaseHTTPRequestHandler):
                         }}
                     }}
                     
-                    function loadEmails(classifiedOnly) {{
-                        const targetDiv = classifiedOnly ? 'classified-data' : 'all-emails-data';
+                    // Pagination state
+                    let emailsPageState = {{
+                        'all-emails': {{ page: 1, limit: 25, total: 0 }},
+                        'classified': {{ page: 1, limit: 25, total: 0 }}
+                    }};
+                    
+                    function loadEmails(classifiedOnly, page = 1) {{
+                        const tabType = classifiedOnly ? 'classified' : 'all-emails';
+                        const targetDiv = tabType + '-data';
+                        
+                        // Update page state
+                        emailsPageState[tabType].page = page;
+                        const limit = emailsPageState[tabType].limit;
+                        const offset = (page - 1) * limit;
+                        
                         document.getElementById(targetDiv).innerHTML = 'Loading...';
                         
-                        fetch(`/api/emails?classified=${{classifiedOnly}}&limit=50`)
+                        fetch(`/api/emails?classified=${{classifiedOnly}}&limit=${{limit}}&offset=${{offset}}`)
                             .then(response => response.json())
                             .then(data => {{
+                                // Update total and render table
+                                emailsPageState[tabType].total = data.total;
                                 document.getElementById(targetDiv).innerHTML = renderEmailTable(data, classifiedOnly);
+                                updatePaginationControls(tabType);
                             }})
                             .catch(error => {{
                                 document.getElementById(targetDiv).innerHTML = '<span style=\"color: red;\">Error loading emails</span>';
                             }});
+                    }}
+                    
+                    function changePage(tabType, direction) {{
+                        const currentPage = emailsPageState[tabType].page;
+                        const newPage = currentPage + direction;
+                        const classifiedOnly = tabType === 'classified';
+                        
+                        if (newPage >= 1) {{
+                            loadEmails(classifiedOnly, newPage);
+                        }}
+                    }}
+                    
+                    function updatePaginationControls(tabType) {{
+                        const state = emailsPageState[tabType];
+                        const totalPages = Math.ceil(state.total / state.limit);
+                        
+                        // Update page info
+                        document.getElementById(tabType + '-page-info').textContent = 
+                            `Page ${{state.page}} of ${{totalPages || 1}}`;
+                        
+                        // Update total count
+                        document.getElementById(tabType + '-total').textContent = 
+                            `${{state.total}} emails total`;
+                        
+                        // Update button states
+                        const prevBtn = document.getElementById(tabType + '-prev');
+                        const nextBtn = document.getElementById(tabType + '-next');
+                        
+                        prevBtn.disabled = state.page <= 1;
+                        nextBtn.disabled = state.page >= totalPages || totalPages === 0;
+                        
+                        // Visual feedback for disabled buttons
+                        if (prevBtn.disabled) {{
+                            prevBtn.style.color = '#808080';
+                        }} else {{
+                            prevBtn.style.color = '';
+                        }}
+                        
+                        if (nextBtn.disabled) {{
+                            nextBtn.style.color = '#808080';
+                        }} else {{
+                            nextBtn.style.color = '';
+                        }}
                     }}
                     
                     function renderEmailTable(data, showClassified) {{
@@ -2024,10 +2111,7 @@ class WebServer(BaseHTTPRequestHandler):
                         
                         html += `
                                 </tbody>
-                            </table>
-                            <div style=\"margin-top: 8px; font-size: 10px; color: #666;\">
-                                Total: ${{data.total}} emails
-                            </div>`;
+                            </table>`;
                         
                         return html;
                     }}

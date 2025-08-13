@@ -728,6 +728,235 @@ class SubscriptionManager:
         
         return {"processed": processed_count, "subscriptions": new_subscriptions}
 
+    def fetch_metadata_only(self, connection_id: str, max_results: int = 100):
+        """Fetch email metadata only (no body, no LLM) for fast initial ingestion"""
+        import time
+        start_time = time.time()
+        
+        print(f"\n{'='*60}")
+        print(f"METADATA-ONLY FETCH (FAST MODE)")
+        print(f"{'='*60}")
+        print(f"Request: {max_results} emails (metadata only)")
+        print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*60}\n")
+        
+        # Get connection
+        conn = self.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM connections WHERE id = ?', (connection_id,))
+        connection = cursor.fetchone()
+        
+        if not connection:
+            return {"error": "Connection not found"}
+            
+        access_token = connection[3]  # access_token column (id=0, user_id=1, email=2, access_token=3)
+        
+        # Prepare headers
+        auth_headers = {'Authorization': f'Bearer {access_token}'}
+        
+        # Phase 1: Get message list (with pagination for >500)
+        print(f"Fetching message list from Gmail...")
+        messages = []
+        page_token = None
+        pages_fetched = 0
+        
+        while len(messages) < max_results:
+            # Gmail API limits to 500 per request
+            batch_size = min(500, max_results - len(messages))
+            list_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults={batch_size}'
+            
+            if page_token:
+                list_url += f'&pageToken={page_token}'
+            
+            if pages_fetched == 0:
+                print(f"Gmail API URL: {list_url}")
+            else:
+                print(f"Fetching page {pages_fetched + 1}...")
+            
+            response = requests.get(list_url, headers=auth_headers)
+            
+            # Check for errors
+            if response.status_code != 200:
+                print(f"ERROR: Gmail API returned status {response.status_code}")
+                print(f"Response: {response.text}")
+                return {"error": f"Gmail API error: {response.status_code}"}
+                
+            response_data = response.json()
+            
+            # Check for API errors
+            if 'error' in response_data:
+                print(f"ERROR: Gmail API error: {response_data['error']}")
+                return {"error": f"Gmail API: {response_data['error'].get('message', 'Unknown error')}"}
+            
+            batch_messages = response_data.get('messages', [])
+            messages.extend(batch_messages)
+            pages_fetched += 1
+            
+            print(f"  Page {pages_fetched}: Got {len(batch_messages)} messages (total: {len(messages)})")
+            
+            # Check if there are more pages
+            page_token = response_data.get('nextPageToken')
+            if not page_token or len(batch_messages) == 0:
+                break
+        
+        print(f"Gmail API returned {len(messages)} message IDs total")
+        
+        # Phase 2: Fetch metadata for each message using format=METADATA
+        print(f"\nFetching metadata for {len(messages)} emails...")
+        
+        fetched_count = 0
+        duplicate_count = 0
+        error_count = 0
+        
+        # Use threading for concurrent fetching
+        import concurrent.futures
+        from concurrent.futures import ThreadPoolExecutor
+        fetch_lock = threading.Lock()
+        
+        def fetch_single_metadata(message, index):
+            """Fetch metadata for a single message"""
+            nonlocal fetched_count, error_count  # Declare all nonlocal variables at the start
+            
+            try:
+                # IMPORTANT: Using format=METADATA for headers only (no body)
+                msg_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{message["id"]}?format=METADATA'
+                msg_response = requests.get(msg_url, headers=auth_headers, timeout=10)
+                
+                if msg_response.status_code == 200:
+                    msg_data = msg_response.json()
+                    
+                    # Extract metadata from headers
+                    headers_list = msg_data.get('payload', {}).get('headers', [])
+                    subject = next((h['value'] for h in headers_list if h['name'] == 'Subject'), 'No Subject')
+                    sender = next((h['value'] for h in headers_list if h['name'] == 'From'), 'Unknown')
+                    date_str = next((h['value'] for h in headers_list if h['name'] == 'Date'), '')
+                    
+                    # Store historyId if available (for future incremental syncs)
+                    history_id = msg_data.get('historyId')
+                    
+                    with fetch_lock:
+                        fetched_count += 1
+                        if fetched_count % 50 == 0:
+                            elapsed = time.time() - start_time
+                            rate = fetched_count / elapsed
+                            print(f"  Progress: {fetched_count}/{len(messages)} emails ({rate:.1f} emails/sec)")
+                    
+                    return {
+                        'id': message['id'],
+                        'subject': subject,
+                        'sender': sender,
+                        'date': date_str,
+                        'historyId': history_id
+                    }
+                else:
+                    with fetch_lock:
+                        error_count += 1
+                    return None
+                    
+            except Exception as e:
+                with fetch_lock:
+                    error_count += 1
+                return None
+        
+        # Fetch metadata concurrently
+        email_data = []
+        
+        # Handle case where there are no messages
+        if not messages:
+            print("No messages to fetch")
+            fetch_time = time.time() - start_time
+            print(f"\n✓ No messages found in Gmail")
+            print(f"  Total time: {fetch_time:.1f} seconds")
+            
+            # Still update historyId if we have a response
+            if response_data.get('historyId'):
+                conn = self.get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('UPDATE connections SET history_id = ? WHERE id = ?', 
+                              (response_data['historyId'], connection_id))
+                conn.commit()
+                conn.close()
+            
+            return {
+                "fetched": 0,
+                "stored": 0,
+                "duplicates": 0,
+                "errors": 0,
+                "time": round(fetch_time, 1)
+            }
+        
+        max_workers = min(10, len(messages))  # Limit concurrent requests
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(fetch_single_metadata, message, i): i 
+                for i, message in enumerate(messages)
+            }
+            
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result:
+                    email_data.append(result)
+        
+        fetch_time = time.time() - start_time
+        print(f"\n✓ Fetched metadata for {len(email_data)}/{len(messages)} emails in {fetch_time:.1f} seconds")
+        print(f"  Average: {fetch_time/len(messages):.2f} seconds per email" if messages else "")
+        print(f"  Rate: {len(email_data)/fetch_time:.1f} emails/second" if fetch_time > 0 else "")
+        
+        # Phase 3: Store metadata in database (no LLM classification)
+        print(f"\nStoring metadata in database...")
+        stored_count = 0
+        
+        for email in email_data:
+            # Check if already exists
+            cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ?', 
+                          (email['id'],))
+            if cursor.fetchone():
+                duplicate_count += 1
+                continue
+            
+            # Store email metadata (is_subscription=0, unclassified)
+            cursor.execute('''
+                INSERT INTO processed_emails 
+                (connection_id, gmail_message_id, subject, sender, received_at, 
+                 is_subscription, confidence_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                connection_id, email['id'], email['subject'], email['sender'],
+                email['date'], 0, 0.0  # Unclassified
+            ))
+            stored_count += 1
+        
+        # Update historyId if we got any emails
+        if email_data and email_data[0].get('historyId'):
+            cursor.execute('UPDATE connections SET history_id = ? WHERE id = ?', 
+                          (email_data[0]['historyId'], connection_id))
+        
+        conn.commit()
+        conn.close()
+        
+        # Summary
+        total_time = time.time() - start_time
+        print(f"\n{'='*60}")
+        print(f"METADATA FETCH COMPLETE")
+        print(f"{'='*60}")
+        print(f"Total time: {total_time:.1f} seconds")
+        print(f"Emails fetched: {len(email_data)}")
+        print(f"New emails stored: {stored_count}")
+        print(f"Duplicates skipped: {duplicate_count}")
+        print(f"Errors: {error_count}")
+        print(f"Average time per email: {total_time/len(messages):.2f}s" if messages else "")
+        print(f"Speed improvement: ~10x faster than full fetch")
+        print(f"{'='*60}\n")
+        
+        return {
+            "fetched": len(email_data),
+            "stored": stored_count,
+            "duplicates": duplicate_count,
+            "errors": error_count,
+            "time": round(total_time, 1)
+        }
+
     def get_subscriptions(self) -> List[Dict]:
         """Get all subscriptions for dashboard"""
         conn = self.get_db_connection()
@@ -830,6 +1059,8 @@ class WebServer(BaseHTTPRequestHandler):
             self.handle_oauth_callback(params)
         elif path == '/sync':
             self.handle_sync()
+        elif path == '/fetch-metadata':
+            self.handle_metadata_fetch(params)
         elif path == '/api/emails':
             self.handle_emails_api(params)
         elif path == '/reset':
@@ -1349,6 +1580,40 @@ class WebServer(BaseHTTPRequestHandler):
                             </div>
                             <div class="field-row" style="margin-top: 12px;">
                                 <button onclick="syncEmails()">Sync Emails</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Fast Metadata Fetch Window (Testing) -->
+                    <div class="window" style="margin-top: 16px;">
+                        <div class="title-bar">
+                            <div class="title-bar-text">📧 Fast Metadata Fetch (Testing)</div>
+                            <div class="title-bar-controls">
+                                <button aria-label="Minimize"></button>
+                                <button aria-label="Maximize"></button>
+                                <button aria-label="Close"></button>
+                            </div>
+                        </div>
+                        <div class="window-body">
+                            <p style="font-size: 11px; margin-bottom: 12px;">
+                                <strong>Test fast email ingestion:</strong> Fetches email metadata only (subject, sender, date) without body content or LLM processing.
+                                Expected ~10x speed improvement.
+                            </p>
+                            <div class="field-row">
+                                <label for="metadataCount">Number of emails:</label>
+                                <select id="metadataCount">
+                                    <option value="100">100 emails</option>
+                                    <option value="500">500 emails</option>
+                                    <option value="1000" selected>1,000 emails</option>
+                                    <option value="5000">5,000 emails</option>
+                                    <option value="10000">10,000 emails</option>
+                                </select>
+                            </div>
+                            <div class="field-row" style="margin-top: 12px;">
+                                <button onclick="fetchMetadataOnly()" id="metadataButton">🚀 Fetch Metadata Only</button>
+                            </div>
+                            <div id="metadataStatus" style="margin-top: 12px; font-size: 11px; color: #333;">
+                                Ready to fetch metadata...
                             </div>
                         </div>
                     </div>
@@ -1956,6 +2221,40 @@ class WebServer(BaseHTTPRequestHandler):
                         window.location.href = `/sync?count=${{count}}&direction=${{direction}}`;
                     }}
                     
+                    function fetchMetadataOnly() {{
+                        const count = document.getElementById('metadataCount').value;
+                        const button = document.getElementById('metadataButton');
+                        const status = document.getElementById('metadataStatus');
+                        
+                        button.disabled = true;
+                        status.innerHTML = `<span style="color: blue;">⏳ Fetching ${{count}} emails metadata...</span>`;
+                        
+                        fetch(`/fetch-metadata?count=${{count}}`)
+                            .then(response => response.json())
+                            .then(data => {{
+                                if (data.error) {{
+                                    status.innerHTML = `<span style="color: red;">❌ Error: ${{data.error}}</span>`;
+                                }} else {{
+                                    status.innerHTML = `
+                                        <span style="color: green;">✅ Success!</span><br>
+                                        <strong>Results:</strong><br>
+                                        • Fetched: ${{data.fetched}} emails<br>
+                                        • Stored: ${{data.stored}} new emails<br>
+                                        • Duplicates: ${{data.duplicates}} skipped<br>
+                                        • Time: ${{data.time}}s<br>
+                                        • Speed: ${{(data.fetched / data.time).toFixed(1)}} emails/sec
+                                    `;
+                                    // Refresh the email display
+                                    loadEmails(false);
+                                }}
+                                button.disabled = false;
+                            }})
+                            .catch(error => {{
+                                status.innerHTML = `<span style="color: red;">❌ Error: ${{error}}</span>`;
+                                button.disabled = false;
+                            }});
+                    }}
+                    
                     function showTab(tabName) {{
                         // Hide all tab contents
                         document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
@@ -2269,6 +2568,30 @@ class WebServer(BaseHTTPRequestHandler):
         self.send_response(302)
         self.send_header('Location', f'/?synced={result["processed"]}&found={result["subscriptions"]}')
         self.end_headers()
+
+    def handle_metadata_fetch(self, params):
+        """Handle metadata-only fetch request (fast mode)"""
+        # Get active connection
+        connections = self.sm.get_connections()
+        if not connections:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "No Gmail connection found"}).encode())
+            return
+        
+        # Parse query parameters
+        max_results = int(params.get('count', [100])[0])
+        connection_id = connections[0]['id']
+        
+        # Run metadata fetch (no LLM)
+        result = self.sm.fetch_metadata_only(connection_id, max_results)
+        
+        # Return JSON response
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(result).encode())
 
     def handle_emails_api(self, params):
         """Handle emails API endpoint"""

@@ -23,6 +23,9 @@ import time
 import requests
 from dotenv import load_dotenv
 
+# Templates
+from templates import get_dashboard_template, render_connections
+
 # Load environment variables from existing .env file
 load_dotenv()
 
@@ -1070,6 +1073,19 @@ class WebServer(BaseHTTPRequestHandler):
 
     def serve_dashboard(self):
         """Serve main dashboard HTML"""
+        subscriptions = self.sm.get_subscriptions()
+        connections = self.sm.get_connections()
+        
+        connections_html = render_connections(connections)
+        html = get_dashboard_template(connections_html, subscriptions)
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode())
+
+    def serve_dashboard_old(self):
+        """Original serve dashboard method - keeping as backup"""
         subscriptions = self.sm.get_subscriptions()
         connections = self.sm.get_connections()
         
@@ -2426,29 +2442,6 @@ class WebServer(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode())
 
-    def render_connections(self, connections):
-        """Render Gmail connections section"""
-        if not connections:
-            return '''
-                <p style="margin-bottom: 12px;">No Gmail connection found.</p>
-                <button onclick="window.location.href='/auth/gmail';">
-                    Connect Gmail
-                </button>
-            '''
-        
-        html = ""
-        for conn in connections:
-            status = "✅ Active" if conn['is_active'] else "❌ Inactive"
-            last_sync = conn['last_sync_at'] if conn['last_sync_at'] else 'Never'
-            html += f'''
-                <div style="border: 1px inset #c0c0c0; padding: 8px; margin-bottom: 8px; background: #f8f8f8;">
-                    <div style="font-weight: bold; margin-bottom: 4px;">{conn['email']}</div>
-                    <div style="font-size: 10px; color: #666;">
-                        Status: {status} | Last sync: {last_sync}
-                    </div>
-                </div>
-            '''
-        return html
 
     def render_subscriptions(self, subscriptions):
         """Render subscriptions table"""

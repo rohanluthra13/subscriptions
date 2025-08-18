@@ -70,7 +70,8 @@ class SubscriptionManager:
                 subject TEXT,
                 sender TEXT,
                 sender_domain TEXT,
-                domain_is_subscription BOOLEAN DEFAULT NULL,
+                subscription_status TEXT DEFAULT NULL,
+                user_selected BOOLEAN DEFAULT 0,
                 received_at TIMESTAMP,
                 processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_subscription BOOLEAN DEFAULT 0,
@@ -88,9 +89,31 @@ class SubscriptionManager:
             pass  # Column already exists
         
         try:
-            cursor.execute('ALTER TABLE processed_emails ADD COLUMN domain_is_subscription BOOLEAN DEFAULT NULL')
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN subscription_status TEXT DEFAULT NULL')
         except sqlite3.OperationalError:
             pass  # Column already exists
+            
+        try:
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN user_selected BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        # Migrate existing data to new schema
+        try:
+            cursor.execute('''
+                UPDATE processed_emails 
+                SET subscription_status = CASE 
+                    WHEN subscription_status = 'subscription' THEN 'active'
+                    WHEN domain_is_subscription = 1 THEN 'active'
+                    WHEN domain_is_subscription = 0 THEN 'not_subscription'
+                    ELSE subscription_status
+                END
+                WHERE subscription_status = 'subscription' 
+                   OR subscription_status = 'pending_review'
+                   OR domain_is_subscription IS NOT NULL
+            ''')
+        except sqlite3.OperationalError:
+            pass  # Migration already done or old column doesn't exist
         
         cursor.execute('INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)', 
                       ('1', 'user@example.com', 'Default User'))
@@ -408,44 +431,50 @@ class SubscriptionManager:
         cursor.execute('''
             SELECT sender_domain, 
                    COUNT(*) as email_count,
-                   domain_is_subscription,
+                   subscription_status,
+                   user_selected,
                    MAX(processed_at) as last_seen
             FROM processed_emails 
             WHERE sender_domain IS NOT NULL AND sender_domain != ""
-            GROUP BY sender_domain, domain_is_subscription
+            GROUP BY sender_domain, subscription_status, user_selected
             ORDER BY email_count DESC
         ''')
         
         results = cursor.fetchall()
         conn.close()
         
-        # Group by domain (since domain_is_subscription might be different for same domain)
+        # Group by domain (since subscription_status might be different for same domain)
         domain_stats = {}
-        for domain, count, is_subscription, last_seen in results:
+        for domain, count, subscription_status, user_selected, last_seen in results:
             if domain not in domain_stats:
                 domain_stats[domain] = {
                     'domain': domain,
                     'email_count': 0,
-                    'is_subscription': is_subscription,
+                    'subscription_status': subscription_status,
+                    'user_selected': user_selected,
                     'last_seen': last_seen
                 }
             domain_stats[domain]['email_count'] += count
-            # Use the most recent classification
-            if is_subscription is not None:
-                domain_stats[domain]['is_subscription'] = is_subscription
+            # Use the most recent classification (prioritize user_selected=1)
+            if user_selected == 1:
+                domain_stats[domain]['subscription_status'] = subscription_status
+                domain_stats[domain]['user_selected'] = user_selected
         
         return list(domain_stats.values())
 
-    def update_domain_classification(self, domain: str, is_subscription: bool):
+    def update_domain_classification(self, domain: str, subscription_status: str):
         """Update domain classification for all emails from that domain"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
+        # Set user_selected based on whether status is being set or cleared
+        user_selected = 1 if subscription_status is not None else 0
+        
         cursor.execute('''
             UPDATE processed_emails 
-            SET domain_is_subscription = ? 
+            SET subscription_status = ?, user_selected = ?
             WHERE sender_domain = ?
-        ''', (is_subscription, domain))
+        ''', (subscription_status, user_selected, domain))
         
         affected_rows = cursor.rowcount
         conn.commit()
@@ -817,17 +846,52 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         for stats in domain_stats:
             domain = stats['domain']
             count = stats['email_count']
-            is_subscription = stats['is_subscription']
+            subscription_status = stats['subscription_status']
+            user_selected = stats['user_selected']
             
-            checked = 'checked' if is_subscription else ''
-            row_class = 'subscription-row' if is_subscription else ''
+            # Determine if checkbox should be checked
+            checked = 'checked' if subscription_status == 'subscription' else ''
+            
+            # Row styling based on status
+            if subscription_status == 'active':
+                row_class = 'active-row'
+                status_text = '✓ Active'
+            elif subscription_status == 'inactive':
+                row_class = 'inactive-row'
+                status_text = '⏸ Inactive'
+            elif subscription_status == 'trial':
+                row_class = 'trial-row'
+                status_text = '🔄 Trial'
+            elif subscription_status == 'not_subscription':
+                row_class = 'not-subscription-row'
+                status_text = '✗ Not Subscription'
+            else:
+                row_class = ''
+                status_text = '? Unclassified'
+            
+            # Show if user-selected or LLM-suggested
+            source_indicator = '👤' if user_selected else '🤖'
+            
+            # Set selected option for dropdown
+            active_selected = 'selected' if subscription_status == 'active' else ''
+            inactive_selected = 'selected' if subscription_status == 'inactive' else ''
+            trial_selected = 'selected' if subscription_status == 'trial' else ''
+            not_subscription_selected = 'selected' if subscription_status == 'not_subscription' else ''
+            unclassified_selected = 'selected' if subscription_status is None else ''
             
             domain_rows += f"""
             <tr class="{row_class}">
                 <td>{domain}</td>
                 <td>{count}</td>
+                <td>{status_text} {source_indicator}</td>
                 <td>
-                    <input type="checkbox" name="domains" value="{domain}" {checked}>
+                    <select name="domain_{domain}" style="width: 100%;">
+                        <option value="unclassified" {unclassified_selected}>? Unclassified</option>
+                        <option value="active" {active_selected}>✓ Active</option>
+                        <option value="inactive" {inactive_selected}>⏸ Inactive</option>
+                        <option value="trial" {trial_selected}>🔄 Trial</option>
+                        <option value="not_subscription" {not_subscription_selected}>✗ Not Subscription</option>
+                    </select>
                 </td>
             </tr>
             """
@@ -842,21 +906,37 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         table {{ border-collapse: collapse; width: 100%; }}
         th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
         th {{ background-color: #f5f5f5; }}
-        .subscription-row {{ background-color: #e8f5e8; }}
+        .active-row {{ background-color: #e8f5e8; }}
+        .inactive-row {{ background-color: #fff3cd; }}
+        .trial-row {{ background-color: #e3f2fd; }}
+        .not-subscription-row {{ background-color: #f5f5f5; }}
         .form-buttons {{ margin: 20px 0; }}
         button {{ padding: 10px 20px; margin: 10px 5px; }}
+        .legend {{ margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px; }}
+        .legend span {{ margin-right: 20px; }}
     </style>
 </head>
 <body>
     <h1>Domain Classification</h1>
     <p>Mark domains that send subscription-related emails:</p>
     
+    <div class="legend">
+        <strong>Legend:</strong>
+        <span>👤 User Selected</span>
+        <span>🤖 LLM Suggested</span>
+        <span style="background: #e8f5e8; padding: 2px 5px;">✓ Active</span>
+        <span style="background: #fff3cd; padding: 2px 5px;">⏸ Inactive</span>
+        <span style="background: #e3f2fd; padding: 2px 5px;">🔄 Trial</span>
+        <span style="background: #f5f5f5; padding: 2px 5px;">✗ Not Subscription</span>
+    </div>
+    
     <form action="/classify-domains" method="post">
         <table>
             <tr>
                 <th>Domain</th>
                 <th>Email Count</th>
-                <th>Is Subscription?</th>
+                <th>Current Status</th>
+                <th>Set Status</th>
             </tr>
             {domain_rows}
         </table>
@@ -884,20 +964,39 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length).decode('utf-8')
         form_data = parse_qs(post_data)
         
-        # Get selected domains
-        selected_domains = form_data.get('domains', [])
-        
-        # Get all domains for comparison
-        all_domain_stats = self.sm.get_domain_stats()
-        all_domains = {stats['domain'] for stats in all_domain_stats}
-        
+        # Process dropdown selections
         updated_count = 0
+        active_count = 0
+        inactive_count = 0
+        trial_count = 0
+        not_subscription_count = 0
+        unclassified_count = 0
         
-        # Update classifications
-        for domain in all_domains:
-            is_subscription = domain in selected_domains
-            affected = self.sm.update_domain_classification(domain, is_subscription)
-            updated_count += affected
+        # Get all domain dropdown values
+        for key, value_list in form_data.items():
+            if key.startswith('domain_'):
+                domain = key[7:]  # Remove 'domain_' prefix
+                new_status = value_list[0] if value_list else 'unclassified'
+                
+                # Convert 'unclassified' to NULL for database
+                db_status = None if new_status == 'unclassified' else new_status
+                
+                affected = self.sm.update_domain_classification(domain, db_status)
+                updated_count += affected
+                
+                # Count by category
+                if new_status == 'active':
+                    active_count += 1
+                elif new_status == 'inactive':
+                    inactive_count += 1
+                elif new_status == 'trial':
+                    trial_count += 1
+                elif new_status == 'not_subscription':
+                    not_subscription_count += 1
+                else:
+                    unclassified_count += 1
+        
+        total_domains = active_count + inactive_count + trial_count + not_subscription_count + unclassified_count
         
         html = f"""
 <!DOCTYPE html>
@@ -908,9 +1007,16 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 </head>
 <body>
     <h1>Domain Classifications Saved</h1>
-    <p>✅ Updated {updated_count} emails across {len(all_domains)} domains</p>
-    <p>📧 Subscription domains: {len(selected_domains)}</p>
-    <p>📧 Non-subscription domains: {len(all_domains) - len(selected_domains)}</p>
+    <p>✅ Updated {updated_count} emails across {total_domains} domains</p>
+    
+    <div style="margin: 20px 0;">
+        <h3>Classification Summary:</h3>
+        <p>✓ Active Subscriptions: {active_count} domains</p>
+        <p>⏸ Inactive Subscriptions: {inactive_count} domains</p>
+        <p>🔄 Trials: {trial_count} domains</p>
+        <p>✗ Not Subscriptions: {not_subscription_count} domains</p>
+        <p>? Unclassified: {unclassified_count} domains</p>
+    </div>
     
     <a href="/"><button>Back to Dashboard</button></a>
     <a href="/domains"><button>View Classifications</button></a>

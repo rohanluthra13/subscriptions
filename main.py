@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode, parse_qs, urlparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
-import threading
 import time
 
 # Load environment variables
@@ -23,14 +22,12 @@ class SubscriptionManager:
         self.db_path = "subscriptions.db"
         self.init_database()
         
-        # Environment variables
         self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.google_client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.openai_model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
         self.confidence_threshold = float(os.getenv('LLM_CONFIDENCE_THRESHOLD', '0.7'))
         
-        # Server config
         self.port = 8000
         self.redirect_uri = f"http://localhost:{self.port}/auth/callback"
 
@@ -39,7 +36,6 @@ class SubscriptionManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Users table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY DEFAULT '1',
@@ -50,7 +46,6 @@ class SubscriptionManager:
             )
         ''')
         
-        # Connections table (Gmail OAuth)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS connections (
                 id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
@@ -67,7 +62,6 @@ class SubscriptionManager:
             )
         ''')
         
-        # Processed emails table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS processed_emails (
                 id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
@@ -85,16 +79,12 @@ class SubscriptionManager:
             )
         ''')
         
-        # Create default user
         cursor.execute('INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)', 
                       ('1', 'user@example.com', 'Default User'))
         
         conn.commit()
         conn.close()
 
-    def get_db_connection(self):
-        """Get database connection"""
-        return sqlite3.connect(self.db_path)
 
     def get_gmail_auth_url(self):
         """Generate Gmail OAuth URL"""
@@ -104,7 +94,7 @@ class SubscriptionManager:
             'scope': 'https://www.googleapis.com/auth/gmail.readonly',
             'response_type': 'code',
             'access_type': 'offline',
-            'prompt': 'consent'
+            'prompt': 'select_account consent'  # Force account selection and consent
         }
         return f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
 
@@ -119,7 +109,8 @@ class SubscriptionManager:
         }
         
         response = requests.post('https://oauth2.googleapis.com/token', data=data)
-        return response.json()
+        token_data = response.json()
+        return token_data
 
     def refresh_access_token(self, refresh_token: str):
         """Refresh expired access token"""
@@ -127,15 +118,17 @@ class SubscriptionManager:
             'client_id': self.google_client_id,
             'client_secret': self.google_client_secret,
             'refresh_token': refresh_token,
-            'grant_type': 'refresh_token'
+            'grant_type': 'refresh_token',
+            'scope': 'https://www.googleapis.com/auth/gmail.readonly'
         }
         
         response = requests.post('https://oauth2.googleapis.com/token', data=data)
-        return response.json()
+        token_data = response.json()
+        return token_data
 
     def get_valid_access_token(self, connection_id: str) -> str:
         """Get valid access token, refreshing if necessary"""
-        conn = self.get_db_connection()
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -172,80 +165,109 @@ class SubscriptionManager:
         conn.close()
         return access_token
 
-    def fetch_metadata_only(self, connection_id: str, max_results: int = 100):
-        """Fetch email metadata only (fast mode) - our core function"""
-        import time
+    def fetch_year_of_emails(self, connection_id: str, years_back: int = 1):
+        """Simple approach: Get message IDs from last year, then fetch in small batches with retry"""
         start_time = time.time()
         
-        print(f"Starting fast metadata fetch for {max_results} emails...")
+        # Step 1: Get all message IDs from the last year
+        print(f"Step 1: Getting message IDs from last {years_back} year(s)...")
         
         access_token = self.get_valid_access_token(connection_id)
         headers = {'Authorization': f'Bearer {access_token}'}
         
-        # Get list of message IDs (fast)
-        list_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults={max_results}'
-        list_response = requests.get(list_url, headers=headers)
+        # Calculate date for query
+        date_from = (datetime.now() - timedelta(days=365 * years_back)).strftime("%Y/%m/%d")
+        query = f"after:{date_from} -in:trash -in:sent"
         
-        if list_response.status_code != 200:
-            return {"error": f"Failed to fetch message list: {list_response.text}"}
+        # Collect all message IDs with pagination
+        all_messages = []
+        next_page_token = None
+        page_count = 0
         
-        messages = list_response.json().get('messages', [])
-        print(f"Found {len(messages)} messages to process")
+        while True:
+            page_count += 1
+            # Build URL with query and pagination
+            url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=500'
+            if next_page_token:
+                url += f'&pageToken={next_page_token}'
+            
+            response = requests.get(url, headers=headers)
+            if response.status_code != 200:
+                return {"error": f"Failed to get message list: {response.text}"}
+            
+            data = response.json()
+            messages = data.get('messages', [])
+            all_messages.extend(messages)
+            
+            print(f"  Page {page_count}: Got {len(messages)} message IDs (total: {len(all_messages)})")
+            
+            # Check for more pages
+            next_page_token = data.get('nextPageToken')
+            if not next_page_token:
+                break
         
-        if not messages:
-            return {"fetched": 0, "stored": 0, "duplicates": 0, "time": 0}
+        print(f"Step 1 complete: Found {len(all_messages)} emails from last {years_back} year(s)")
         
-        conn = self.get_db_connection()
+        if not all_messages:
+            return {"fetched": 0, "stored": 0, "duplicates": 0, "errors": 0, "time": 0}
+        
+        # Step 2: Filter out already processed messages
+        print("Step 2: Checking for already processed emails...")
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        stored_count = 0
+        new_messages = []
         duplicate_count = 0
+        
+        for message in all_messages:
+            msg_id = message['id']
+            cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ?', (msg_id,))
+            if cursor.fetchone():
+                duplicate_count += 1
+            else:
+                new_messages.append(message)
+        
+        print(f"  {duplicate_count} already processed, {len(new_messages)} new emails to fetch")
+        
+        if not new_messages:
+            conn.close()
+            return {"fetched": len(all_messages), "stored": 0, "duplicates": duplicate_count, "errors": 0, "time": 0}
+        
+        # Step 3: Process in small batches with simple retry
+        print(f"Step 3: Fetching metadata for {len(new_messages)} emails...")
+        batch_size = 10  # Smaller batches to reduce rate limit issues
+        stored_count = 0
         error_count = 0
         
-        # Process messages in batches for efficiency
-        for i, message in enumerate(messages):
-            try:
-                msg_id = message['id']
+        for i in range(0, len(new_messages), batch_size):
+            batch = new_messages[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(new_messages) + batch_size - 1) // batch_size
+            
+            # Simple retry logic - if batch fails, retry up to 3 times
+            for attempt in range(3):
+                success = self.process_batch_simple(batch, connection_id, cursor)
                 
-                # Check if already processed
-                cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ?', (msg_id,))
-                if cursor.fetchone():
-                    duplicate_count += 1
-                    continue
-                
-                # Fetch metadata for this message
-                msg_url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?format=metadata'
-                msg_response = requests.get(msg_url, headers=headers)
-                
-                if msg_response.status_code == 200:
-                    msg_data = msg_response.json()
-                    headers_list = msg_data.get('payload', {}).get('headers', [])
-                    msg_headers = {h['name']: h['value'] for h in headers_list if 'name' in h and 'value' in h}
-                    
-                    # Store metadata
-                    cursor.execute('''
-                        INSERT INTO processed_emails 
-                        (connection_id, gmail_message_id, subject, sender, received_at)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (
-                        connection_id,
-                        msg_id,
-                        msg_headers.get('Subject', ''),
-                        msg_headers.get('From', ''),
-                        datetime.now().isoformat()
-                    ))
-                    stored_count += 1
+                if success:
+                    stored_count += len(batch)
+                    print(f"  Batch {batch_num}/{total_batches}: Success ({len(batch)} emails)")
+                    break
                 else:
-                    error_count += 1
-                    print(f"Error fetching message {i+1}: {msg_response.status_code}")
-                    
-                # Progress indicator
-                if (i + 1) % 50 == 0:
-                    print(f"Processed {i + 1}/{len(messages)} messages...")
-                    
-            except Exception as e:
-                error_count += 1
-                print(f"Error processing message {i+1}: {e}")
+                    if attempt < 2:
+                        wait_time = 2 ** (attempt + 1)  # 2, 4 seconds
+                        print(f"  Batch {batch_num}/{total_batches}: Failed attempt {attempt + 1}, waiting {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        error_count += len(batch)
+                        print(f"  Batch {batch_num}/{total_batches}: Failed after 3 attempts")
+            
+            # Small delay between batches to be nice to the API
+            if i + batch_size < len(new_messages):
+                time.sleep(0.5)
+            
+            # Commit every 10 batches
+            if batch_num % 10 == 0:
+                conn.commit()
         
         conn.commit()
         conn.close()
@@ -253,19 +275,70 @@ class SubscriptionManager:
         total_time = time.time() - start_time
         
         result = {
-            "fetched": len(messages),
+            "fetched": len(all_messages),
             "stored": stored_count,
             "duplicates": duplicate_count,
             "errors": error_count,
             "time": round(total_time, 1)
         }
         
-        print(f"Metadata fetch complete: {result}")
+        print(f"\nComplete! Processed {len(all_messages)} emails in {total_time:.1f} seconds")
+        print(f"  Stored: {stored_count}, Duplicates: {duplicate_count}, Errors: {error_count}")
+        
         return result
+
+    def process_batch_simple(self, batch: list, connection_id: str, cursor) -> bool:
+        """Process a batch of messages - returns True if successful, False if any errors"""
+        try:
+            access_token = self.get_valid_access_token(connection_id)
+            headers = {'Authorization': f'Bearer {access_token}'}
+            
+            # Process each message in the batch individually (simpler than batch API)
+            for message in batch:
+                msg_id = message['id']
+                
+                # Get message metadata
+                url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?format=metadata'
+                response = requests.get(url, headers=headers)
+                
+                if response.status_code != 200:
+                    # Any error means batch failed - will retry whole batch
+                    return False
+                
+                msg_data = response.json()
+                
+                # Extract headers
+                headers_list = msg_data.get('payload', {}).get('headers', [])
+                msg_headers = {h['name']: h['value'] for h in headers_list if 'name' in h and 'value' in h}
+                
+                # Store in database (skip if duplicate)
+                try:
+                    cursor.execute('''
+                        INSERT INTO processed_emails 
+                        (connection_id, gmail_message_id, subject, sender, received_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (
+                        connection_id,
+                        msg_id,
+                        msg_headers.get('Subject', '')[:500],
+                        msg_headers.get('From', '')[:300],
+                        datetime.now().isoformat()
+                    ))
+                except sqlite3.IntegrityError:
+                    # Duplicate - that's fine, continue
+                    pass
+            
+            return True
+            
+        except Exception as e:
+            print(f"    Batch error: {e}")
+            return False
+
+
 
     def get_connections(self):
         """Get all Gmail connections"""
-        conn = self.get_db_connection()
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM connections ORDER BY created_at DESC')
         columns = [desc[0] for desc in cursor.description]
@@ -275,7 +348,7 @@ class SubscriptionManager:
 
     def get_processed_emails(self, limit: int = 50, offset: int = 0):
         """Get processed emails with pagination"""
-        conn = self.get_db_connection()
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         # Get total count
@@ -296,14 +369,14 @@ class SubscriptionManager:
         return {"emails": emails, "total": total}
 
     def reset_database(self):
-        """Clear all data"""
-        conn = self.get_db_connection()
+        """Clear all data and force fresh authentication"""
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('DELETE FROM processed_emails')
         cursor.execute('DELETE FROM connections')
         conn.commit()
         conn.close()
-        print("Database reset complete")
+        print("Database reset complete - fresh authentication required")
 
 class SimpleWebServer(BaseHTTPRequestHandler):
     def __init__(self, subscription_manager, *args, **kwargs):
@@ -368,16 +441,11 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     <div class="section">
         <h2>2. Fetch Email Metadata</h2>
         <form action="/fetch" method="post">
-            <label>Number of emails:</label>
-            <select name="count">
-                <option value="100">100 emails</option>
-                <option value="500">500 emails</option>
-                <option value="1000" selected>1,000 emails</option>
-                <option value="5000">5,000 emails</option>
-            </select>
-            <button type="submit">Fetch Metadata</button>
+            <button type="submit" style="background: #4CAF50; color: white; font-size: 16px;">
+                Fetch Last Year of Emails
+            </button>
+            <p><small>Fetches all emails from the last 12 months (excluding trash/sent)</small></p>
         </form>
-        <p><small>Fetches email headers only (fast). No LLM processing yet.</small></p>
     </div>
     
     <div class="section">
@@ -440,7 +508,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         profile = profile_response.json()
         
         # Save connection to database
-        conn = self.sm.get_db_connection()
+        conn = sqlite3.connect(self.sm.db_path)
         cursor = conn.cursor()
         
         expiry_time = datetime.now() + timedelta(seconds=token_data['expires_in'])
@@ -467,13 +535,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 
     def handle_metadata_fetch(self):
         """Handle metadata fetch request"""
-        # Parse form data
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length).decode('utf-8')
-        form_data = parse_qs(post_data)
-        
-        max_results = int(form_data.get('count', ['1000'])[0])
-        
         # Get active connection
         connections = self.sm.get_connections()
         if not connections:
@@ -482,8 +543,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         connection_id = connections[0]['id']
         
-        # Run metadata fetch
-        result = self.sm.fetch_metadata_only(connection_id, max_results)
+        # Run simplified fetch for 1 year
+        result = self.sm.fetch_year_of_emails(connection_id, years_back=1)
         
         # Return simple response
         html = f"""
@@ -494,12 +555,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     <style>body {{ font-family: Arial, sans-serif; margin: 40px; }}</style>
 </head>
 <body>
-    <h1>Metadata Fetch Complete</h1>
-    <p>Fetched: {result.get('fetched', 0)} emails</p>
-    <p>Stored: {result.get('stored', 0)} new emails</p>
-    <p>Duplicates skipped: {result.get('duplicates', 0)}</p>
-    <p>Time: {result.get('time', 0)}s</p>
-    <p>Speed: {result.get('fetched', 0) / max(result.get('time', 1), 1):.1f} emails/sec</p>
+    <h1>Email Fetch Complete</h1>
+    <p><strong>Total found: {result.get('fetched', 0)} emails from last year</strong></p>
+    <p>✅ Successfully stored: {result.get('stored', 0)} new emails</p>
+    <p>⏩ Skipped duplicates: {result.get('duplicates', 0)}</p>
+    {f'<p>❌ Failed to fetch: {result.get("errors", 0)} emails</p>' if result.get('errors', 0) > 0 else ''}
+    <p>⏱️ Time taken: {result.get('time', 0)} seconds</p>
+    
     <a href="/"><button>Back to Dashboard</button></a>
     <a href="/emails"><button>View Emails</button></a>
 </body>
@@ -584,6 +646,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_response(302)
         self.send_header('Location', '/?reset=1')
         self.end_headers()
+
 
 def create_handler(subscription_manager):
     """Create request handler with subscription manager"""

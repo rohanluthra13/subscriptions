@@ -152,6 +152,13 @@ response = requests.post('https://api.openai.com/v1/chat/completions',
 2. Delete `subscriptions.db` to recreate with new schema
 3. Or add migration logic if preserving data
 
+### Domain Clustering Workflow
+1. **Fetch email metadata** - Use existing fast batch ingestion
+2. **Cluster by sender domain** - Group emails by domain, show counts
+3. **Manual classification** - User marks domains as subscription/non-subscription
+4. **Store domain choices** - Persist classifications for future processing
+5. **Filter subscription emails** - Only process emails from marked domains
+
 ## Web Interface
 
 ### Three-Tab Dashboard

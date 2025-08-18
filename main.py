@@ -69,6 +69,8 @@ class SubscriptionManager:
                 gmail_message_id TEXT UNIQUE NOT NULL,
                 subject TEXT,
                 sender TEXT,
+                sender_domain TEXT,
+                domain_is_subscription BOOLEAN DEFAULT NULL,
                 received_at TIMESTAMP,
                 processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_subscription BOOLEAN DEFAULT 0,
@@ -79,12 +81,46 @@ class SubscriptionManager:
             )
         ''')
         
+        # Add columns to existing table if they don't exist
+        try:
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN sender_domain TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN domain_is_subscription BOOLEAN DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
         cursor.execute('INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)', 
                       ('1', 'user@example.com', 'Default User'))
         
         conn.commit()
         conn.close()
 
+    def extract_domain(self, sender: str) -> str:
+        """Extract domain from sender email address"""
+        if not sender:
+            return ""
+        
+        # Handle formats like "Name <email@domain.com>" or just "email@domain.com"
+        if '<' in sender and '>' in sender:
+            # Extract email from "Name <email@domain.com>" format
+            start = sender.find('<') + 1
+            end = sender.find('>')
+            if start > 0 and end > start:
+                email = sender[start:end]
+            else:
+                email = sender
+        else:
+            email = sender
+        
+        # Extract domain from email
+        if '@' in email:
+            domain = email.split('@')[-1].strip().lower()
+            return domain
+        
+        return ""
 
     def get_gmail_auth_url(self):
         """Generate Gmail OAuth URL"""
@@ -311,17 +347,21 @@ class SubscriptionManager:
                 headers_list = msg_data.get('payload', {}).get('headers', [])
                 msg_headers = {h['name']: h['value'] for h in headers_list if 'name' in h and 'value' in h}
                 
-                # Store in database (skip if duplicate)
+                # Extract domain and store in database (skip if duplicate)
+                sender = msg_headers.get('From', '')[:300]
+                sender_domain = self.extract_domain(sender)
+                
                 try:
                     cursor.execute('''
                         INSERT INTO processed_emails 
-                        (connection_id, gmail_message_id, subject, sender, received_at)
-                        VALUES (?, ?, ?, ?, ?)
+                        (connection_id, gmail_message_id, subject, sender, sender_domain, received_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     ''', (
                         connection_id,
                         msg_id,
                         msg_headers.get('Subject', '')[:500],
-                        msg_headers.get('From', '')[:300],
+                        sender,
+                        sender_domain,
                         datetime.now().isoformat()
                     ))
                 except sqlite3.IntegrityError:
@@ -334,7 +374,84 @@ class SubscriptionManager:
             print(f"    Batch error: {e}")
             return False
 
+    def analyze_domains(self):
+        """Extract and update domains for all existing emails"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Get all emails without domain info
+        cursor.execute('SELECT id, sender FROM processed_emails WHERE sender_domain IS NULL OR sender_domain = ""')
+        emails_to_update = cursor.fetchall()
+        
+        print(f"Analyzing domains for {len(emails_to_update)} emails...")
+        
+        updated_count = 0
+        for email_id, sender in emails_to_update:
+            domain = self.extract_domain(sender)
+            cursor.execute('UPDATE processed_emails SET sender_domain = ? WHERE id = ?', (domain, email_id))
+            updated_count += 1
+            
+            if updated_count % 100 == 0:
+                print(f"  Updated {updated_count}/{len(emails_to_update)} emails...")
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"Domain analysis complete: {updated_count} emails updated")
+        return {"updated": updated_count, "total": len(emails_to_update)}
 
+    def get_domain_stats(self):
+        """Get domain statistics for clustering"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT sender_domain, 
+                   COUNT(*) as email_count,
+                   domain_is_subscription,
+                   MAX(processed_at) as last_seen
+            FROM processed_emails 
+            WHERE sender_domain IS NOT NULL AND sender_domain != ""
+            GROUP BY sender_domain, domain_is_subscription
+            ORDER BY email_count DESC
+        ''')
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        # Group by domain (since domain_is_subscription might be different for same domain)
+        domain_stats = {}
+        for domain, count, is_subscription, last_seen in results:
+            if domain not in domain_stats:
+                domain_stats[domain] = {
+                    'domain': domain,
+                    'email_count': 0,
+                    'is_subscription': is_subscription,
+                    'last_seen': last_seen
+                }
+            domain_stats[domain]['email_count'] += count
+            # Use the most recent classification
+            if is_subscription is not None:
+                domain_stats[domain]['is_subscription'] = is_subscription
+        
+        return list(domain_stats.values())
+
+    def update_domain_classification(self, domain: str, is_subscription: bool):
+        """Update domain classification for all emails from that domain"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE processed_emails 
+            SET domain_is_subscription = ? 
+            WHERE sender_domain = ?
+        ''', (is_subscription, domain))
+        
+        affected_rows = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        return affected_rows
 
     def get_connections(self):
         """Get all Gmail connections"""
@@ -397,6 +514,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_oauth_callback(params)
         elif path == '/emails':
             self.serve_emails_page(params)
+        elif path == '/domains':
+            self.serve_domains_page()
         elif path == '/reset':
             self.handle_reset()
         else:
@@ -409,6 +528,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         if path == '/fetch':
             self.handle_metadata_fetch()
+        elif path == '/analyze-domains':
+            self.handle_analyze_domains()
+        elif path == '/classify-domains':
+            self.handle_domain_classification()
         else:
             self.send_error(404)
 
@@ -449,16 +572,27 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     </div>
     
     <div class="section">
-        <h2>3. View Data</h2>
+        <h2>3. Domain Clustering</h2>
+        <form action="/analyze-domains" method="post">
+            <button type="submit" style="background: #2196F3; color: white;">
+                Analyze Domains
+            </button>
+            <p><small>Extract domains from existing emails for classification</small></p>
+        </form>
+        <a href="/domains"><button>Classify Domains</button></a>
+    </div>
+    
+    <div class="section">
+        <h2>4. View Data</h2>
         <a href="/emails"><button>View Stored Emails</button></a>
         <a href="/reset"><button onclick="return confirm('Delete all data?')">Reset Database</button></a>
     </div>
     
     <div class="section">
-        <h2>4. LLM Integration (Ready)</h2>
+        <h2>5. LLM Integration (Ready)</h2>
         <p>OpenAI API Key: {'✓ Configured' if self.sm.openai_api_key else '✗ Missing'}</p>
         <p>Model: {self.sm.openai_model}</p>
-        <p><small>Ready for next phase: grouping and classification</small></p>
+        <p><small>Ready for next phase: subscription email processing</small></p>
     </div>
 </body>
 </html>
@@ -647,6 +781,148 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_header('Location', '/?reset=1')
         self.end_headers()
 
+    def handle_analyze_domains(self):
+        """Handle domain analysis request"""
+        result = self.sm.analyze_domains()
+        
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Domain Analysis Complete</title>
+    <style>body {{ font-family: Arial, sans-serif; margin: 40px; }}</style>
+</head>
+<body>
+    <h1>Domain Analysis Complete</h1>
+    <p>✅ Updated: {result.get('updated', 0)} emails</p>
+    <p>📊 Total processed: {result.get('total', 0)} emails</p>
+    
+    <a href="/"><button>Back to Dashboard</button></a>
+    <a href="/domains"><button>Classify Domains</button></a>
+</body>
+</html>
+        """
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode())
+
+    def serve_domains_page(self):
+        """Serve domain classification page"""
+        domain_stats = self.sm.get_domain_stats()
+        
+        # Generate domain rows
+        domain_rows = ""
+        for stats in domain_stats:
+            domain = stats['domain']
+            count = stats['email_count']
+            is_subscription = stats['is_subscription']
+            
+            checked = 'checked' if is_subscription else ''
+            row_class = 'subscription-row' if is_subscription else ''
+            
+            domain_rows += f"""
+            <tr class="{row_class}">
+                <td>{domain}</td>
+                <td>{count}</td>
+                <td>
+                    <input type="checkbox" name="domains" value="{domain}" {checked}>
+                </td>
+            </tr>
+            """
+        
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Domain Classification</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        table {{ border-collapse: collapse; width: 100%; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        th {{ background-color: #f5f5f5; }}
+        .subscription-row {{ background-color: #e8f5e8; }}
+        .form-buttons {{ margin: 20px 0; }}
+        button {{ padding: 10px 20px; margin: 10px 5px; }}
+    </style>
+</head>
+<body>
+    <h1>Domain Classification</h1>
+    <p>Mark domains that send subscription-related emails:</p>
+    
+    <form action="/classify-domains" method="post">
+        <table>
+            <tr>
+                <th>Domain</th>
+                <th>Email Count</th>
+                <th>Is Subscription?</th>
+            </tr>
+            {domain_rows}
+        </table>
+        
+        <div class="form-buttons">
+            <button type="submit" style="background: #4CAF50; color: white;">
+                Save Classifications
+            </button>
+            <a href="/"><button type="button">Back to Dashboard</button></a>
+        </div>
+    </form>
+</body>
+</html>
+        """
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode())
+
+    def handle_domain_classification(self):
+        """Handle domain classification form submission"""
+        # Parse form data
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length).decode('utf-8')
+        form_data = parse_qs(post_data)
+        
+        # Get selected domains
+        selected_domains = form_data.get('domains', [])
+        
+        # Get all domains for comparison
+        all_domain_stats = self.sm.get_domain_stats()
+        all_domains = {stats['domain'] for stats in all_domain_stats}
+        
+        updated_count = 0
+        
+        # Update classifications
+        for domain in all_domains:
+            is_subscription = domain in selected_domains
+            affected = self.sm.update_domain_classification(domain, is_subscription)
+            updated_count += affected
+        
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Classification Saved</title>
+    <style>body {{ font-family: Arial, sans-serif; margin: 40px; }}</style>
+</head>
+<body>
+    <h1>Domain Classifications Saved</h1>
+    <p>✅ Updated {updated_count} emails across {len(all_domains)} domains</p>
+    <p>📧 Subscription domains: {len(selected_domains)}</p>
+    <p>📧 Non-subscription domains: {len(all_domains) - len(selected_domains)}</p>
+    
+    <a href="/"><button>Back to Dashboard</button></a>
+    <a href="/domains"><button>View Classifications</button></a>
+    <a href="/emails"><button>View Emails</button></a>
+</body>
+</html>
+        """
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode())
 
 def create_handler(subscription_manager):
     """Create request handler with subscription manager"""

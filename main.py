@@ -37,19 +37,8 @@ class SubscriptionManager:
         cursor = conn.cursor()
         
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY DEFAULT '1',
-                email TEXT UNIQUE NOT NULL,
-                name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
             CREATE TABLE IF NOT EXISTS connections (
                 id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-                user_id TEXT NOT NULL DEFAULT '1',
                 email TEXT NOT NULL,
                 access_token TEXT NOT NULL,
                 refresh_token TEXT NOT NULL,
@@ -57,8 +46,7 @@ class SubscriptionManager:
                 history_id TEXT,
                 last_sync_at TIMESTAMP,
                 is_active BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -115,8 +103,7 @@ class SubscriptionManager:
         except sqlite3.OperationalError:
             pass  # Migration already done or old column doesn't exist
         
-        cursor.execute('INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)', 
-                      ('1', 'user@example.com', 'Default User'))
+        # No users table needed - removed
         
         conn.commit()
         conn.close()
@@ -678,10 +665,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         cursor.execute('''
             INSERT OR REPLACE INTO connections 
-            (user_id, email, access_token, refresh_token, token_expiry)
-            VALUES (?, ?, ?, ?, ?)
+            (email, access_token, refresh_token, token_expiry)
+            VALUES (?, ?, ?, ?)
         ''', (
-            '1',
             profile['emailAddress'],
             token_data['access_token'],
             token_data.get('refresh_token', ''),

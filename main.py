@@ -405,103 +405,6 @@ class SubscriptionManager:
             print(f"    Batch error: {e}")
             return False
 
-    def analyze_domains(self):
-        """Extract and update domains for all existing emails"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get all emails without domain info
-        cursor.execute('SELECT id, sender FROM processed_emails WHERE sender_domain IS NULL OR sender_domain = ""')
-        emails_to_update = cursor.fetchall()
-        
-        print(f"Analyzing domains for {len(emails_to_update)} emails...")
-        
-        updated_count = 0
-        for email_id, sender in emails_to_update:
-            domain = self.extract_domain(sender)
-            cursor.execute('UPDATE processed_emails SET sender_domain = ? WHERE id = ?', (domain, email_id))
-            updated_count += 1
-            
-            if updated_count % 100 == 0:
-                print(f"  Updated {updated_count}/{len(emails_to_update)} emails...")
-        
-        conn.commit()
-        conn.close()
-        
-        print(f"Domain analysis complete: {updated_count} emails updated")
-        return {"updated": updated_count, "total": len(emails_to_update)}
-
-    def get_domain_stats(self):
-        """Get domain statistics for clustering"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get domain stats from processed emails
-        cursor.execute('''
-            SELECT 
-                sender_domain,
-                COUNT(*) as email_count,
-                MAX(processed_at) as last_seen
-            FROM processed_emails 
-            WHERE sender_domain IS NOT NULL AND sender_domain != ""
-            GROUP BY sender_domain
-            ORDER BY email_count DESC
-        ''')
-        
-        email_results = cursor.fetchall()
-        
-        # Get subscription data
-        cursor.execute('''
-            SELECT domain, status
-            FROM subscriptions
-        ''')
-        subscription_results = cursor.fetchall()
-        subscription_map = {domain: status for domain, status in subscription_results}
-        
-        conn.close()
-        
-        # Build domain stats
-        domain_stats = []
-        for domain, count, last_seen in email_results:
-            domain_stats.append({
-                'domain': domain,
-                'email_count': count,
-                'subscription_status': subscription_map.get(domain, None),
-                'user_selected': 1 if domain in subscription_map else 0,
-                'last_seen': last_seen
-            })
-        
-        return domain_stats
-
-    def update_domain_classification(self, domain: str, subscription_status: str):
-        """Update or create subscription entry for a domain"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get the first email account (for single-user setup)
-        cursor.execute('SELECT email FROM connections LIMIT 1')
-        result = cursor.fetchone()
-        if not result:
-            conn.close()
-            return 0
-        
-        email = result[0]
-        
-        if subscription_status and subscription_status != 'unclassified':
-            # Insert or update subscription
-            cursor.execute('''
-                INSERT OR REPLACE INTO subscriptions (email, name, domain, status, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (email, domain.split('.')[0].title(), domain, subscription_status))
-        else:
-            # Remove subscription if unclassified
-            cursor.execute('DELETE FROM subscriptions WHERE domain = ?', (domain,))
-        
-        affected_rows = cursor.rowcount
-        conn.commit()
-        conn.close()
-        
-        return affected_rows
 
     def get_connections(self):
         """Get all Gmail connections"""
@@ -564,8 +467,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_oauth_callback(params)
         elif path == '/emails':
             self.serve_emails_page(params)
-        elif path == '/domains':
-            self.serve_domains_page()
         elif path == '/reset':
             self.handle_reset()
         else:
@@ -578,10 +479,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         if path == '/fetch':
             self.handle_metadata_fetch()
-        elif path == '/analyze-domains':
-            self.handle_analyze_domains()
-        elif path == '/classify-domains':
-            self.handle_domain_classification()
         else:
             self.send_error(404)
 
@@ -622,24 +519,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     </div>
     
     <div class="section">
-        <h2>3. Domain Clustering</h2>
-        <form action="/analyze-domains" method="post">
-            <button type="submit" style="background: #2196F3; color: white;">
-                Analyze Domains
-            </button>
-            <p><small>Extract domains from existing emails for classification</small></p>
-        </form>
-        <a href="/domains"><button>Classify Domains</button></a>
-    </div>
-    
-    <div class="section">
-        <h2>4. View Data</h2>
+        <h2>3. View Data</h2>
         <a href="/emails"><button>View Stored Emails</button></a>
         <a href="/reset"><button onclick="return confirm('Delete all data?')">Reset Database</button></a>
     </div>
     
     <div class="section">
-        <h2>5. LLM Integration (Ready)</h2>
+        <h2>4. LLM Integration (Ready)</h2>
         <p>OpenAI API Key: {'✓ Configured' if self.sm.openai_api_key else '✗ Missing'}</p>
         <p>Model: {self.sm.openai_model}</p>
         <p><small>Ready for next phase: subscription email processing</small></p>
@@ -830,225 +716,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_header('Location', '/?reset=1')
         self.end_headers()
 
-    def handle_analyze_domains(self):
-        """Handle domain analysis request"""
-        result = self.sm.analyze_domains()
-        
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Domain Analysis Complete</title>
-    <style>body {{ font-family: Arial, sans-serif; margin: 40px; }}</style>
-</head>
-<body>
-    <h1>Domain Analysis Complete</h1>
-    <p>✅ Updated: {result.get('updated', 0)} emails</p>
-    <p>📊 Total processed: {result.get('total', 0)} emails</p>
-    
-    <a href="/"><button>Back to Dashboard</button></a>
-    <a href="/domains"><button>Classify Domains</button></a>
-</body>
-</html>
-        """
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(html.encode())
-
-    def serve_domains_page(self):
-        """Serve domain classification page"""
-        domain_stats = self.sm.get_domain_stats()
-        
-        # Generate domain rows
-        domain_rows = ""
-        for stats in domain_stats:
-            domain = stats['domain']
-            count = stats['email_count']
-            subscription_status = stats['subscription_status']
-            user_selected = stats['user_selected']
-            
-            # Determine if checkbox should be checked
-            checked = 'checked' if subscription_status == 'subscription' else ''
-            
-            # Row styling based on status
-            if subscription_status == 'active':
-                row_class = 'active-row'
-                status_text = '✓ Active'
-            elif subscription_status == 'inactive':
-                row_class = 'inactive-row'
-                status_text = '⏸ Inactive'
-            elif subscription_status == 'trial':
-                row_class = 'trial-row'
-                status_text = '🔄 Trial'
-            elif subscription_status == 'not_subscription':
-                row_class = 'not-subscription-row'
-                status_text = '✗ Not Subscription'
-            else:
-                row_class = ''
-                status_text = '? Unclassified'
-            
-            # Show if user-selected or LLM-suggested
-            source_indicator = '👤' if user_selected else '🤖'
-            
-            # Set selected option for dropdown
-            active_selected = 'selected' if subscription_status == 'active' else ''
-            inactive_selected = 'selected' if subscription_status == 'inactive' else ''
-            trial_selected = 'selected' if subscription_status == 'trial' else ''
-            not_subscription_selected = 'selected' if subscription_status == 'not_subscription' else ''
-            unclassified_selected = 'selected' if subscription_status is None else ''
-            
-            domain_rows += f"""
-            <tr class="{row_class}">
-                <td>{domain}</td>
-                <td>{count}</td>
-                <td>{status_text} {source_indicator}</td>
-                <td>
-                    <select name="domain_{domain}" style="width: 100%;">
-                        <option value="unclassified" {unclassified_selected}>? Unclassified</option>
-                        <option value="active" {active_selected}>✓ Active</option>
-                        <option value="inactive" {inactive_selected}>⏸ Inactive</option>
-                        <option value="trial" {trial_selected}>🔄 Trial</option>
-                        <option value="not_subscription" {not_subscription_selected}>✗ Not Subscription</option>
-                    </select>
-                </td>
-            </tr>
-            """
-        
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Domain Classification</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 40px; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-        th {{ background-color: #f5f5f5; }}
-        .active-row {{ background-color: #e8f5e8; }}
-        .inactive-row {{ background-color: #fff3cd; }}
-        .trial-row {{ background-color: #e3f2fd; }}
-        .not-subscription-row {{ background-color: #f5f5f5; }}
-        .form-buttons {{ margin: 20px 0; }}
-        button {{ padding: 10px 20px; margin: 10px 5px; }}
-        .legend {{ margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px; }}
-        .legend span {{ margin-right: 20px; }}
-    </style>
-</head>
-<body>
-    <h1>Domain Classification</h1>
-    <p>Mark domains that send subscription-related emails:</p>
-    
-    <div class="legend">
-        <strong>Legend:</strong>
-        <span>👤 User Selected</span>
-        <span>🤖 LLM Suggested</span>
-        <span style="background: #e8f5e8; padding: 2px 5px;">✓ Active</span>
-        <span style="background: #fff3cd; padding: 2px 5px;">⏸ Inactive</span>
-        <span style="background: #e3f2fd; padding: 2px 5px;">🔄 Trial</span>
-        <span style="background: #f5f5f5; padding: 2px 5px;">✗ Not Subscription</span>
-    </div>
-    
-    <form action="/classify-domains" method="post">
-        <table>
-            <tr>
-                <th>Domain</th>
-                <th>Email Count</th>
-                <th>Current Status</th>
-                <th>Set Status</th>
-            </tr>
-            {domain_rows}
-        </table>
-        
-        <div class="form-buttons">
-            <button type="submit" style="background: #4CAF50; color: white;">
-                Save Classifications
-            </button>
-            <a href="/"><button type="button">Back to Dashboard</button></a>
-        </div>
-    </form>
-</body>
-</html>
-        """
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(html.encode())
-
-    def handle_domain_classification(self):
-        """Handle domain classification form submission"""
-        # Parse form data
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length).decode('utf-8')
-        form_data = parse_qs(post_data)
-        
-        # Process dropdown selections
-        updated_count = 0
-        active_count = 0
-        inactive_count = 0
-        trial_count = 0
-        not_subscription_count = 0
-        unclassified_count = 0
-        
-        # Get all domain dropdown values
-        for key, value_list in form_data.items():
-            if key.startswith('domain_'):
-                domain = key[7:]  # Remove 'domain_' prefix
-                new_status = value_list[0] if value_list else 'unclassified'
-                
-                # Convert 'unclassified' to NULL for database
-                db_status = None if new_status == 'unclassified' else new_status
-                
-                affected = self.sm.update_domain_classification(domain, db_status)
-                updated_count += affected
-                
-                # Count by category
-                if new_status == 'active':
-                    active_count += 1
-                elif new_status == 'inactive':
-                    inactive_count += 1
-                elif new_status == 'trial':
-                    trial_count += 1
-                elif new_status == 'not_subscription':
-                    not_subscription_count += 1
-                else:
-                    unclassified_count += 1
-        
-        total_domains = active_count + inactive_count + trial_count + not_subscription_count + unclassified_count
-        
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Classification Saved</title>
-    <style>body {{ font-family: Arial, sans-serif; margin: 40px; }}</style>
-</head>
-<body>
-    <h1>Domain Classifications Saved</h1>
-    <p>✅ Updated {updated_count} emails across {total_domains} domains</p>
-    
-    <div style="margin: 20px 0;">
-        <h3>Classification Summary:</h3>
-        <p>✓ Active Subscriptions: {active_count} domains</p>
-        <p>⏸ Inactive Subscriptions: {inactive_count} domains</p>
-        <p>🔄 Trials: {trial_count} domains</p>
-        <p>✗ Not Subscriptions: {not_subscription_count} domains</p>
-        <p>? Unclassified: {unclassified_count} domains</p>
-    </div>
-    
-    <a href="/"><button>Back to Dashboard</button></a>
-    <a href="/domains"><button>View Classifications</button></a>
-    <a href="/emails"><button>View Emails</button></a>
-</body>
-</html>
-        """
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(html.encode())
 
 def create_handler(subscription_manager):
     """Create request handler with subscription manager"""

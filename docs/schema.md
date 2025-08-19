@@ -32,7 +32,7 @@ SQLite database schema for the Subscription Manager application.
 | Column        | Type      | Constraints                        | Description                           |
 |---------------|-----------|-----------------------------------|---------------------------------------|
 | id            | TEXT      | PRIMARY KEY, DEFAULT randomblob   | Unique connection identifier          |
-| email         | TEXT      | NOT NULL                          | Connected Gmail account email         |
+| email         | TEXT      | NOT NULL, UNIQUE                  | Connected Gmail account email         |
 | access_token  | TEXT      | NOT NULL                          | OAuth 2.0 access token               |
 | refresh_token | TEXT      | NOT NULL                          | OAuth 2.0 refresh token              |
 | token_expiry  | TIMESTAMP | NOT NULL                          | When access token expires            |
@@ -84,6 +84,7 @@ processed_emails.sender_domain ←→ subscriptions.domain (for matching)
 
 ## Indexes
 
+- UNIQUE(connections.email) - One connection per email account
 - UNIQUE(subscriptions.email, subscriptions.domain) - One subscription per domain per email account
 - UNIQUE(processed_emails.gmail_message_id) - Prevent duplicate email processing
 

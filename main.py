@@ -416,6 +416,16 @@ class SubscriptionManager:
         conn.close()
         return results
 
+    def get_subscriptions(self):
+        """Get all subscriptions"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM subscriptions ORDER BY created_at DESC')
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
     def get_processed_emails(self, limit: int = 50, offset: int = 0):
         """Get processed emails with pagination"""
         conn = sqlite3.connect(self.db_path)
@@ -483,8 +493,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def serve_dashboard(self):
-        """Serve simple dashboard"""
+        """Serve two-panel dashboard"""
         connections = self.sm.get_connections()
+        subscriptions = self.sm.get_subscriptions()
+        connected = len(connections) > 0
         
         html = f"""
 <!DOCTYPE html>
@@ -492,43 +504,116 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 <head>
     <title>Subscription Manager</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 40px; }}
-        .section {{ margin: 30px 0; padding: 20px; border: 1px solid #ddd; }}
-        button {{ padding: 10px 20px; margin: 10px; }}
-        input, select {{ padding: 8px; margin: 5px; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: white; }}
+        
+        /* Main layout: 1/3 left, 2/3 right */
+        .container {{ display: grid; grid-template-columns: 1fr 2fr; height: 100vh; }}
+        
+        /* Left panel with 4 sections */
+        .left-panel {{ border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }}
+        
+        /* Each section has fixed height */
+        .section {{ 
+            border-bottom: 1px solid #e0e0e0;
+        }}
+        .section:nth-child(1) {{ 
+            height: 10vh; 
+            display: flex;
+            align-items: end;
+            padding-bottom: 20px;
+        }}
+        .section:nth-child(2), 
+        .section:nth-child(3), 
+        .section:nth-child(4) {{ 
+            display: grid; 
+            grid-template-columns: 1fr 2fr;
+            align-items: end;
+            padding-bottom: 20px;
+        }}
+        .section:nth-child(2) {{ height: 25vh; }}
+        .section:nth-child(3) {{ height: 25vh; }}
+        .section:nth-child(4) {{ height: 25vh; }}
+        
+        /* Left side of each section (title) */
+        .section-title {{ 
+            padding-left: 30px;
+            font-size: 24px; 
+            font-weight: 700; 
+            color: #000;
+        }}
+        
+        /* Right side of each section (content/actions) */
+        .section-content {{ 
+            padding-right: 30px;
+            text-align: right;
+        }}
+        
+        /* Right panel for subscriptions */
+        .right-panel {{ padding: 30px; }}
+        .right-panel h2 {{ margin: 0 0 30px 0; font-size: 28px; font-weight: 700; }}
+        
+        /* Table styling */
+        table {{ width: 100%; border-collapse: collapse; }}
+        th, td {{ padding: 16px; text-align: left; border-bottom: 1px solid #e0e0e0; }}
+        th {{ font-weight: 600; font-size: 14px; color: #666; }}
+        td {{ font-size: 16px; }}
+        
+        /* Button styling */
+        button {{ 
+            padding: 10px 20px; 
+            margin-left: 10px;
+            border: 1px solid #ddd; 
+            background: white; 
+            cursor: pointer; 
+            font-size: 14px;
+        }}
+        button:hover {{ background: #f8f9fa; }}
+        .primary {{ background: #007bff; color: white; border-color: #007bff; }}
+        .primary:hover {{ background: #0056b3; }}
+        
+        /* Status text */
+        .status {{ color: #666; font-size: 14px; margin-bottom: 10px; }}
     </style>
 </head>
 <body>
-    <h1>Subscription Manager</h1>
-    
-    <div class="section">
-        <h2>1. Gmail Connection</h2>
-        {self.render_connections(connections)}
-    </div>
-    
-    <div class="section">
-        <h2>2. Fetch Email Metadata</h2>
-        <form action="/fetch" method="post">
-            <button type="submit" style="background: #4CAF50; color: white; font-size: 16px;">
-                Fetch Last Year of Emails
-            </button>
-            <p><small>Fetches all emails from the last 12 months (excluding trash/sent)</small></p>
-        </form>
-    </div>
-    
-    <div class="section">
-        <h2>3. View Data</h2>
-        <a href="/emails"><button>View Stored Emails</button></a>
-        <a href="/reset"><button onclick="return confirm('Delete all data?')">Reset Database</button></a>
-    </div>
-    
-    <div class="section">
-        <h2>4. LLM Integration (Ready)</h2>
-        <p>OpenAI API Key: {'✓ Configured' if self.sm.openai_api_key else '✗ Missing'}</p>
-        <p>Model: {self.sm.openai_model}</p>
-        <p><small>Ready for next phase: subscription email processing</small></p>
+    <div class="container">
+        <div class="left-panel">
+            <div class="section">
+                <div class="section-title">Subscription Manager</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Gmail Connection</div>
+                <div class="section-content">
+                    {f'<div class="status">✓ {connections[0]["email"]}</div>' if connected else ''}
+                    <a href="/auth/gmail">
+                        <button>{'Reconnect' if connected else 'Connect Gmail'}</button>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Email Ingest</div>
+                <div class="section-content">
+                    <form action="/fetch" method="post" style="display: inline;">
+                        <button type="submit" class="primary">Fetch Last Year</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">View Data</div>
+                <div class="section-content">
+                    <a href="/emails"><button>View Emails</button></a>
+                    <a href="/reset"><button onclick="return confirm('Delete all data?')">Reset</button></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <h2>Subscriptions</h2>
+            {self.render_subscriptions_table(subscriptions)}
+        </div>
     </div>
 </body>
 </html>
@@ -539,16 +624,38 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode())
 
-    def render_connections(self, connections):
-        if not connections:
-            return '<p>No Gmail connection found. <a href="/auth/gmail"><button>Connect Gmail</button></a></p>'
+    def render_subscriptions_table(self, subscriptions):
+        if not subscriptions:
+            return '<p>No subscriptions found. Connect Gmail and fetch emails to get started.</p>'
         
-        conn = connections[0]
-        return f'''
-        <p>✓ Connected: {conn['email']}</p>
-        <p>Connected at: {conn['created_at']}</p>
-        <a href="/auth/gmail"><button>Reconnect Gmail</button></a>
-        '''
+        rows = ""
+        for sub in subscriptions:
+            rows += f"""
+            <tr>
+                <td>{sub['name']}</td>
+                <td>{sub['domain']}</td>
+                <td>{sub.get('cost', 'N/A')}</td>
+                <td>{sub['status']}</td>
+                <td>{sub.get('next_date', 'N/A')}</td>
+            </tr>
+            """
+        
+        return f"""
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Domain</th>
+                    <th>Cost</th>
+                    <th>Status</th>
+                    <th>Next Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows}
+            </tbody>
+        </table>
+        """
 
     def start_gmail_auth(self):
         """Redirect to Gmail OAuth"""

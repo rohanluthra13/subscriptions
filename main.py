@@ -336,6 +336,13 @@ class SubscriptionManager:
             if batch_num % 10 == 0:
                 conn.commit()
         
+        # Update last_sync_at timestamp
+        cursor.execute('''
+            UPDATE connections 
+            SET last_sync_at = ?
+            WHERE email = ?
+        ''', (datetime.now().isoformat(), email))
+        
         conn.commit()
         conn.close()
         
@@ -426,6 +433,15 @@ class SubscriptionManager:
         conn.close()
         return results
 
+    def get_email_count(self):
+        """Get total count of processed emails"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM processed_emails')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
     def get_processed_emails(self, limit: int = 50, offset: int = 0):
         """Get processed emails with pagination"""
         conn = sqlite3.connect(self.db_path)
@@ -496,7 +512,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         """Serve two-panel dashboard"""
         connections = self.sm.get_connections()
         subscriptions = self.sm.get_subscriptions()
+        email_count = self.sm.get_email_count()
         connected = len(connections) > 0
+        
+        # Check for fetch results in URL params
+        url = urlparse(self.path)
+        params = parse_qs(url.query)
+        fetch_results = params.get('fetch_results', [None])[0]
         
         html = f"""
 <!DOCTYPE html>
@@ -504,7 +526,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 <head>
     <title>Subscription Manager</title>
     <style>
-        body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: white; }}
+        body {{ margin: 0; font-family: "SF Mono", monospace; background: white; }}
         
         /* Main layout: 1/3 left, 2/3 right */
         .container {{ display: grid; grid-template-columns: 1fr 2fr; height: 100vh; }}
@@ -579,33 +601,64 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     <div class="container">
         <div class="left-panel">
             <div class="section">
-                <div class="section-title">Subscription Manager</div>
+                <div class="section-title">subscriptions</div>
             </div>
             
             <div class="section">
-                <div class="section-title">Gmail Connection</div>
-                <div class="section-content">
-                    {f'<div class="status">✓ {connections[0]["email"]}</div>' if connected else ''}
+                <div class="section-title">connect email</div>
+                <div class="section-content" style="{'display: flex; flex-direction: column; justify-content: space-between; height: 100%;' if connected else ''}">
+                    {f'''
+                    <div style="text-align: right; padding-top: 10px;">
+                        <a href="/auth/gmail" style="text-decoration: none;">
+                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">change email</button>
+                        </a>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails connected:</div>
+                        <div class="status" style="color: #008000;">{connections[0]["email"]}</div>
+                    </div>
+                    ''' if connected else '''
                     <a href="/auth/gmail">
-                        <button>{'Reconnect' if connected else 'Connect Gmail'}</button>
+                        <button>Connect Gmail</button>
                     </a>
+                    '''}
                 </div>
             </div>
             
             <div class="section">
-                <div class="section-title">Email Ingest</div>
-                <div class="section-content">
-                    <form action="/fetch" method="post" style="display: inline;">
-                        <button type="submit" class="primary">Fetch Last Year</button>
-                    </form>
+                <div class="section-title">check emails</div>
+                <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                    <div style="text-align: right; padding-top: 10px;">
+                        <form action="/fetch" method="post" style="display: inline;">
+                            <button type="submit" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">fetch emails</button>
+                        </form>
+                    </div>
+                    {f'''
+                    <div style="text-align: right;">
+                        {f'<div style="color: #008000; font-size: 14px; margin-bottom: 15px;">{fetch_results}</div>' if fetch_results else ''}
+                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">last fetched:</div>
+                        <div style="color: #008000; font-size: 14px;">{connections[0]["last_sync_at"][:16] if connections[0]["last_sync_at"] else "never"}</div>
+                    </div>
+                    ''' if connected else ''}
                 </div>
             </div>
             
             <div class="section">
-                <div class="section-title">View Data</div>
-                <div class="section-content">
-                    <a href="/emails"><button>View Emails</button></a>
-                    <a href="/reset"><button onclick="return confirm('Delete all data?')">Reset</button></a>
+                <div class="section-title">view data</div>
+                <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                    <div style="text-align: right; padding-top: 10px;">
+                        <a href="/emails" style="text-decoration: none;">
+                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">view emails</button>
+                        </a>
+                        <span style="margin: 0 10px;"></span>
+                        <a href="/reset" style="text-decoration: none;">
+                            <button onclick="return confirm('Delete all data?')" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">reset</button>
+                        </a>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails stored:</div>
+                        <div style="color: #008000; font-size: 14px;">{email_count}</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -722,32 +775,17 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         # Run simplified fetch for 1 year
         result = self.sm.fetch_year_of_emails(email, years_back=1)
         
-        # Return simple response
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Fetch Complete</title>
-    <style>body {{ font-family: Arial, sans-serif; margin: 40px; }}</style>
-</head>
-<body>
-    <h1>Email Fetch Complete</h1>
-    <p><strong>Total found: {result.get('fetched', 0)} emails from last year</strong></p>
-    <p>✅ Successfully stored: {result.get('stored', 0)} new emails</p>
-    <p>⏩ Skipped duplicates: {result.get('duplicates', 0)}</p>
-    {f'<p>❌ Failed to fetch: {result.get("errors", 0)} emails</p>' if result.get('errors', 0) > 0 else ''}
-    <p>⏱️ Time taken: {result.get('time', 0)} seconds</p>
-    
-    <a href="/"><button>Back to Dashboard</button></a>
-    <a href="/emails"><button>View Emails</button></a>
-</body>
-</html>
-        """
+        # Format results for display
+        fetch_results = f"fetched: {result.get('stored', 0)} new"
+        if result.get('duplicates', 0) > 0:
+            fetch_results += f", {result.get('duplicates', 0)} duplicates"
+        if result.get('errors', 0) > 0:
+            fetch_results += f", {result.get('errors', 0)} errors"
         
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
+        # Redirect back to dashboard with results in URL
+        self.send_response(302)
+        self.send_header('Location', f'/?fetch_results={fetch_results}')
         self.end_headers()
-        self.wfile.write(html.encode())
 
     def serve_emails_page(self, params):
         """Serve emails listing page"""
@@ -785,7 +823,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 <head>
     <title>Stored Emails</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        body {{ font-family: "SF Mono", monospace; margin: 40px; }}
         table {{ border-collapse: collapse; width: 100%; }}
         th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
         th {{ background-color: #f5f5f5; }}

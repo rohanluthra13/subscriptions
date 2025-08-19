@@ -39,7 +39,7 @@ class SubscriptionManager:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS connections (
                 id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-                email TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
                 access_token TEXT NOT NULL,
                 refresh_token TEXT NOT NULL,
                 token_expiry TIMESTAMP NOT NULL,
@@ -53,20 +53,34 @@ class SubscriptionManager:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS processed_emails (
                 id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-                connection_id TEXT NOT NULL,
+                email TEXT NOT NULL,
                 gmail_message_id TEXT UNIQUE NOT NULL,
                 subject TEXT,
                 sender TEXT,
                 sender_domain TEXT,
-                subscription_status TEXT DEFAULT NULL,
-                user_selected BOOLEAN DEFAULT 0,
                 received_at TIMESTAMP,
                 processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_subscription BOOLEAN DEFAULT 0,
                 confidence_score DECIMAL(3,2),
                 vendor TEXT,
-                email_type TEXT,
-                FOREIGN KEY (connection_id) REFERENCES connections(id)
+                email_type TEXT
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
+                email TEXT NOT NULL,
+                name TEXT NOT NULL,
+                domain TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                renewing BOOLEAN DEFAULT 1,
+                cost DECIMAL(10,2),
+                billing_cycle TEXT,
+                next_date DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(email, domain)
             )
         ''')
         
@@ -77,31 +91,38 @@ class SubscriptionManager:
             pass  # Column already exists
         
         try:
-            cursor.execute('ALTER TABLE processed_emails ADD COLUMN subscription_status TEXT DEFAULT NULL')
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN email TEXT')
         except sqlite3.OperationalError:
             pass  # Column already exists
             
         try:
-            cursor.execute('ALTER TABLE processed_emails ADD COLUMN user_selected BOOLEAN DEFAULT 0')
+            cursor.execute('ALTER TABLE connections ADD CONSTRAINT unique_email UNIQUE (email)')
         except sqlite3.OperationalError:
-            pass  # Column already exists
+            pass  # Constraint already exists
             
-        # Migrate existing data to new schema
+        # Migrate existing data to new schema if needed
         try:
-            cursor.execute('''
-                UPDATE processed_emails 
-                SET subscription_status = CASE 
-                    WHEN subscription_status = 'subscription' THEN 'active'
-                    WHEN domain_is_subscription = 1 THEN 'active'
-                    WHEN domain_is_subscription = 0 THEN 'not_subscription'
-                    ELSE subscription_status
-                END
-                WHERE subscription_status = 'subscription' 
-                   OR subscription_status = 'pending_review'
-                   OR domain_is_subscription IS NOT NULL
-            ''')
-        except sqlite3.OperationalError:
-            pass  # Migration already done or old column doesn't exist
+            # First check if connection_id column exists
+            cursor.execute("PRAGMA table_info(processed_emails)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'connection_id' in columns and 'email' in columns:
+                # Migrate connection_id to email
+                cursor.execute('''
+                    UPDATE processed_emails 
+                    SET email = (
+                        SELECT c.email FROM connections c 
+                        WHERE c.id = processed_emails.connection_id
+                    )
+                    WHERE email IS NULL OR email = ''
+                ''')
+            
+            # Now we can safely drop old columns if they exist
+            # Note: SQLite doesn't support DROP COLUMN in older versions
+            # We'll just ignore these columns going forward
+            
+        except sqlite3.OperationalError as e:
+            pass  # Migration issues, continue anyway
         
         # No users table needed - removed
         
@@ -172,15 +193,15 @@ class SubscriptionManager:
         token_data = response.json()
         return token_data
 
-    def get_valid_access_token(self, connection_id: str) -> str:
+    def get_valid_access_token(self, email: str) -> str:
         """Get valid access token, refreshing if necessary"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         cursor.execute('''
             SELECT access_token, refresh_token, token_expiry 
-            FROM connections WHERE id = ?
-        ''', (connection_id,))
+            FROM connections WHERE email = ?
+        ''', (email,))
         
         result = cursor.fetchone()
         if not result:
@@ -200,8 +221,8 @@ class SubscriptionManager:
                 cursor.execute('''
                     UPDATE connections 
                     SET access_token = ?, token_expiry = ?
-                    WHERE id = ?
-                ''', (token_data['access_token'], new_expiry.isoformat(), connection_id))
+                    WHERE email = ?
+                ''', (token_data['access_token'], new_expiry.isoformat(), email))
                 conn.commit()
                 access_token = token_data['access_token']
             else:
@@ -211,14 +232,14 @@ class SubscriptionManager:
         conn.close()
         return access_token
 
-    def fetch_year_of_emails(self, connection_id: str, years_back: int = 1):
+    def fetch_year_of_emails(self, email: str, years_back: int = 1):
         """Simple approach: Get message IDs from last year, then fetch in small batches with retry"""
         start_time = time.time()
         
         # Step 1: Get all message IDs from the last year
         print(f"Step 1: Getting message IDs from last {years_back} year(s)...")
         
-        access_token = self.get_valid_access_token(connection_id)
+        access_token = self.get_valid_access_token(email)
         headers = {'Authorization': f'Bearer {access_token}'}
         
         # Calculate date for query
@@ -292,7 +313,7 @@ class SubscriptionManager:
             
             # Simple retry logic - if batch fails, retry up to 3 times
             for attempt in range(3):
-                success = self.process_batch_simple(batch, connection_id, cursor)
+                success = self.process_batch_simple(batch, email, cursor)
                 
                 if success:
                     stored_count += len(batch)
@@ -333,10 +354,10 @@ class SubscriptionManager:
         
         return result
 
-    def process_batch_simple(self, batch: list, connection_id: str, cursor) -> bool:
+    def process_batch_simple(self, batch: list, email: str, cursor) -> bool:
         """Process a batch of messages - returns True if successful, False if any errors"""
         try:
-            access_token = self.get_valid_access_token(connection_id)
+            access_token = self.get_valid_access_token(email)
             headers = {'Authorization': f'Bearer {access_token}'}
             
             # Process each message in the batch individually (simpler than batch API)
@@ -364,10 +385,10 @@ class SubscriptionManager:
                 try:
                     cursor.execute('''
                         INSERT INTO processed_emails 
-                        (connection_id, gmail_message_id, subject, sender, sender_domain, received_at)
+                        (email, gmail_message_id, subject, sender, sender_domain, received_at)
                         VALUES (?, ?, ?, ?, ?, ?)
                     ''', (
-                        connection_id,
+                        email,
                         msg_id,
                         msg_headers.get('Subject', '')[:500],
                         sender,
@@ -415,53 +436,66 @@ class SubscriptionManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
+        # Get domain stats from processed emails
         cursor.execute('''
-            SELECT sender_domain, 
-                   COUNT(*) as email_count,
-                   subscription_status,
-                   user_selected,
-                   MAX(processed_at) as last_seen
+            SELECT 
+                sender_domain,
+                COUNT(*) as email_count,
+                MAX(processed_at) as last_seen
             FROM processed_emails 
             WHERE sender_domain IS NOT NULL AND sender_domain != ""
-            GROUP BY sender_domain, subscription_status, user_selected
+            GROUP BY sender_domain
             ORDER BY email_count DESC
         ''')
         
-        results = cursor.fetchall()
+        email_results = cursor.fetchall()
+        
+        # Get subscription data
+        cursor.execute('''
+            SELECT domain, status
+            FROM subscriptions
+        ''')
+        subscription_results = cursor.fetchall()
+        subscription_map = {domain: status for domain, status in subscription_results}
+        
         conn.close()
         
-        # Group by domain (since subscription_status might be different for same domain)
-        domain_stats = {}
-        for domain, count, subscription_status, user_selected, last_seen in results:
-            if domain not in domain_stats:
-                domain_stats[domain] = {
-                    'domain': domain,
-                    'email_count': 0,
-                    'subscription_status': subscription_status,
-                    'user_selected': user_selected,
-                    'last_seen': last_seen
-                }
-            domain_stats[domain]['email_count'] += count
-            # Use the most recent classification (prioritize user_selected=1)
-            if user_selected == 1:
-                domain_stats[domain]['subscription_status'] = subscription_status
-                domain_stats[domain]['user_selected'] = user_selected
+        # Build domain stats
+        domain_stats = []
+        for domain, count, last_seen in email_results:
+            domain_stats.append({
+                'domain': domain,
+                'email_count': count,
+                'subscription_status': subscription_map.get(domain, None),
+                'user_selected': 1 if domain in subscription_map else 0,
+                'last_seen': last_seen
+            })
         
-        return list(domain_stats.values())
+        return domain_stats
 
     def update_domain_classification(self, domain: str, subscription_status: str):
-        """Update domain classification for all emails from that domain"""
+        """Update or create subscription entry for a domain"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Set user_selected based on whether status is being set or cleared
-        user_selected = 1 if subscription_status is not None else 0
+        # Get the first email account (for single-user setup)
+        cursor.execute('SELECT email FROM connections LIMIT 1')
+        result = cursor.fetchone()
+        if not result:
+            conn.close()
+            return 0
         
-        cursor.execute('''
-            UPDATE processed_emails 
-            SET subscription_status = ?, user_selected = ?
-            WHERE sender_domain = ?
-        ''', (subscription_status, user_selected, domain))
+        email = result[0]
+        
+        if subscription_status and subscription_status != 'unclassified':
+            # Insert or update subscription
+            cursor.execute('''
+                INSERT OR REPLACE INTO subscriptions (email, name, domain, status, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (email, domain.split('.')[0].title(), domain, subscription_status))
+        else:
+            # Remove subscription if unclassified
+            cursor.execute('DELETE FROM subscriptions WHERE domain = ?', (domain,))
         
         affected_rows = cursor.rowcount
         conn.commit()
@@ -690,10 +724,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.send_error(400, "No Gmail connection found")
             return
         
-        connection_id = connections[0]['id']
+        email = connections[0]['email']
         
         # Run simplified fetch for 1 year
-        result = self.sm.fetch_year_of_emails(connection_id, years_back=1)
+        result = self.sm.fetch_year_of_emails(email, years_back=1)
         
         # Return simple response
         html = f"""

@@ -470,8 +470,8 @@ class SubscriptionManager:
         conn.close()
         return count
 
-    def get_processed_emails(self, limit: int = 50, offset: int = 0):
-        """Get processed emails with pagination"""
+    def get_processed_emails(self, limit: int = None, offset: int = 0):
+        """Get processed emails with optional pagination"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -479,12 +479,18 @@ class SubscriptionManager:
         cursor.execute('SELECT COUNT(*) FROM processed_emails')
         total = cursor.fetchone()[0]
         
-        # Get emails with pagination
-        cursor.execute('''
-            SELECT * FROM processed_emails 
-            ORDER BY processed_at DESC 
-            LIMIT ? OFFSET ?
-        ''', (limit, offset))
+        # Get emails with optional pagination
+        if limit:
+            cursor.execute('''
+                SELECT * FROM processed_emails 
+                ORDER BY received_at DESC 
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+        else:
+            cursor.execute('''
+                SELECT * FROM processed_emails 
+                ORDER BY received_at DESC
+            ''')
         
         columns = [desc[0] for desc in cursor.description]
         emails = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -519,8 +525,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.start_gmail_auth()
         elif path == '/auth/callback':
             self.handle_oauth_callback(params)
-        elif path == '/emails':
-            self.serve_emails_page(params)
         elif path == '/reset':
             self.handle_reset()
         else:
@@ -606,7 +610,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         table {{ width: 100%; border-collapse: collapse; }}
         th, td {{ padding: 16px; text-align: left; border-bottom: 1px solid #e0e0e0; }}
         th {{ font-weight: 600; font-size: 14px; color: #666; }}
-        td {{ font-size: 16px; }}
+        td {{ font-size: 12px; }}
         
         /* Button styling */
         button {{ 
@@ -677,7 +681,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 <div class="section-title">view data</div>
                 <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
                     <div style="text-align: right; padding-top: 10px;">
-                        <a href="/emails" style="text-decoration: none;">
+                        <a href="/?view=emails" style="text-decoration: none;">
                             <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">view emails</button>
                         </a>
                         <span style="margin: 0 10px;"></span>
@@ -694,8 +698,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         </div>
         
         <div class="right-panel">
-            <h2>Subscriptions</h2>
-            {self.render_subscriptions_table(subscriptions)}
+            {self.render_right_panel(params)}
         </div>
     </div>
 </body>
@@ -707,6 +710,61 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode())
 
+    def render_right_panel(self, params):
+        """Render right panel content based on view parameter"""
+        view = params.get('view', ['subscriptions'])[0]
+        
+        if view == 'emails':
+            return self.render_emails_view()
+        else:
+            return self.render_subscriptions_view()
+    
+    def render_subscriptions_view(self):
+        """Render subscriptions table"""
+        subscriptions = self.sm.get_subscriptions()
+        return f"""
+            <h2>Subscriptions</h2>
+            {self.render_subscriptions_table(subscriptions)}
+        """
+    
+    def render_emails_view(self):
+        """Render emails table with back button"""
+        data = self.sm.get_processed_emails()
+        emails = data['emails']
+        total = data['total']
+        
+        email_rows = ""
+        for email in emails:
+            email_rows += f"""
+            <tr>
+                <td>{email['subject'][:50]}...</td>
+                <td>{email['sender'][:30]}...</td>
+                <td>{email['received_at'][:16] if email['received_at'] else 'N/A'}</td>
+            </tr>
+            """
+        
+        return f"""
+            <div style="margin-bottom: 30px;">
+                <a href="/" style="text-decoration: none;">
+                    <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">back</button>
+                </a>
+            </div>
+            <div style="height: 80vh; overflow-y: auto;">
+                <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Sender</th>
+                        <th>Received</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {email_rows}
+                </tbody>
+                </table>
+            </div>
+        """
+    
     def render_subscriptions_table(self, subscriptions):
         if not subscriptions:
             return '<p>No subscriptions found. Connect Gmail and fetch emails to get started.</p>'

@@ -13,6 +13,7 @@ from urllib.parse import urlencode, parse_qs, urlparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 import time
+import pytz
 
 # Load environment variables
 load_dotenv()
@@ -405,15 +406,13 @@ class SubscriptionManager:
                 sender = msg_headers.get('From', '')[:300]
                 sender_domain = self.extract_domain(sender)
                 
-                # Parse actual email date from Gmail headers
+                # Parse Gmail date preserving timezone
                 email_date_str = msg_headers.get('Date', '')
                 try:
-                    # Parse RFC 2822 date format from Gmail
                     from email.utils import parsedate_to_datetime
                     email_date = parsedate_to_datetime(email_date_str)
                     received_at = email_date.isoformat()
                 except (ValueError, TypeError):
-                    # Fallback to processing time if date parsing fails
                     received_at = datetime.now().isoformat()
                 
                 try:
@@ -608,7 +607,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         /* Table styling */
         table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ padding: 16px; text-align: left; border-bottom: 1px solid #e0e0e0; }}
+        th, td {{ padding: 16px; text-align: left; border-bottom: 1px solid #e0e0e0; word-wrap: break-word; }}
         th {{ font-weight: 600; font-size: 14px; color: #666; }}
         td {{ font-size: 12px; }}
         
@@ -737,9 +736,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         for email in emails:
             email_rows += f"""
             <tr>
-                <td>{email['subject'][:50]}...</td>
-                <td>{email['sender'][:30]}...</td>
-                <td>{email['received_at'][:16] if email['received_at'] else 'N/A'}</td>
+                <td>{email['sender']}</td>
+                <td>{email['subject']}</td>
+                <td>{self.format_datetime_nz(email['received_at']) if email['received_at'] else 'N/A'}</td>
             </tr>
             """
         
@@ -753,8 +752,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 <table>
                 <thead>
                     <tr>
-                        <th>Subject</th>
                         <th>Sender</th>
+                        <th>Subject</th>
                         <th>Received</th>
                     </tr>
                 </thead>
@@ -941,6 +940,23 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html')
         self.end_headers()
         self.wfile.write(html.encode())
+
+    def format_datetime_nz(self, iso_datetime_str):
+        """Convert ISO datetime to New Zealand timezone for display"""
+        try:
+            # Parse the ISO datetime (with timezone)
+            dt = datetime.fromisoformat(iso_datetime_str.replace('Z', '+00:00'))
+            # Convert to New Zealand timezone
+            nz_tz = pytz.timezone('Pacific/Auckland')
+            nz_dt = dt.astimezone(nz_tz)
+            # Format for display
+            formatted = nz_dt.strftime('%d %b %Y %I:%M%p')
+            # Remove leading zero from hour and fix am/pm case
+            import re
+            formatted = re.sub(r' 0(\d):', r' \1:', formatted)
+            return formatted.replace('AM', 'am').replace('PM', 'pm')
+        except (ValueError, AttributeError):
+            return iso_datetime_str
 
     def handle_reset(self):
         """Reset database"""

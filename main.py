@@ -8,10 +8,12 @@ import os
 import sqlite3
 import json
 import requests
+import re
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, parse_qs, urlparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
+from email.utils import parsedate_to_datetime
 import time
 import pytz
 
@@ -25,9 +27,6 @@ class SubscriptionManager:
         
         self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.google_client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        self.openai_model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
-        self.confidence_threshold = float(os.getenv('LLM_CONFIDENCE_THRESHOLD', '0.7'))
         
         self.port = 8000
         self.redirect_uri = f"http://localhost:{self.port}/auth/callback"
@@ -60,11 +59,7 @@ class SubscriptionManager:
                 sender TEXT,
                 sender_domain TEXT,
                 received_at TIMESTAMP,
-                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_subscription BOOLEAN DEFAULT 0,
-                confidence_score DECIMAL(3,2),
-                vendor TEXT,
-                email_type TEXT
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -94,47 +89,16 @@ class SubscriptionManager:
             )
         ''')
         
-        # Add columns to existing table if they don't exist
+        # Simple migration: add missing columns if they don't exist
         try:
             cursor.execute('ALTER TABLE processed_emails ADD COLUMN sender_domain TEXT')
         except sqlite3.OperationalError:
-            pass  # Column already exists
+            pass
         
         try:
             cursor.execute('ALTER TABLE processed_emails ADD COLUMN email TEXT')
         except sqlite3.OperationalError:
-            pass  # Column already exists
-            
-        try:
-            cursor.execute('ALTER TABLE connections ADD CONSTRAINT unique_email UNIQUE (email)')
-        except sqlite3.OperationalError:
-            pass  # Constraint already exists
-            
-        # Migrate existing data to new schema if needed
-        try:
-            # First check if connection_id column exists
-            cursor.execute("PRAGMA table_info(processed_emails)")
-            columns = [col[1] for col in cursor.fetchall()]
-            
-            if 'connection_id' in columns and 'email' in columns:
-                # Migrate connection_id to email
-                cursor.execute('''
-                    UPDATE processed_emails 
-                    SET email = (
-                        SELECT c.email FROM connections c 
-                        WHERE c.id = processed_emails.connection_id
-                    )
-                    WHERE email IS NULL OR email = ''
-                ''')
-            
-            # Now we can safely drop old columns if they exist
-            # Note: SQLite doesn't support DROP COLUMN in older versions
-            # We'll just ignore these columns going forward
-            
-        except sqlite3.OperationalError as e:
-            pass  # Migration issues, continue anyway
-        
-        # No users table needed - removed
+            pass
         
         conn.commit()
         conn.close()
@@ -418,7 +382,6 @@ class SubscriptionManager:
                 # Parse Gmail date preserving timezone
                 email_date_str = msg_headers.get('Date', '')
                 try:
-                    from email.utils import parsedate_to_datetime
                     email_date = parsedate_to_datetime(email_date_str)
                     received_at = email_date.isoformat()
                 except (ValueError, TypeError):
@@ -516,58 +479,6 @@ class SubscriptionManager:
         conn.close()
         print("Database reset complete - fresh authentication required")
 
-    def create_subscription(self, email: str, data: dict) -> str:
-        """Create a new subscription"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO subscriptions 
-            (email, name, domain, status, cost, next_date, billing_cycle, renewing)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            email,
-            data.get('name', ''),
-            data.get('domain', ''),
-            data.get('status', 'active'),
-            data.get('cost') if data.get('cost') else None,
-            data.get('next_date') if data.get('next_date') else None,
-            data.get('billing_cycle'),
-            data.get('renewing', True)
-        ))
-        
-        subscription_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return subscription_id
-
-    def update_subscription(self, subscription_id: str, field: str, value: str):
-        """Update a subscription field"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Validate field to prevent SQL injection
-        allowed_fields = ['name', 'domain', 'status', 'cost', 'next_date', 'billing_cycle', 'renewing']
-        if field not in allowed_fields:
-            conn.close()
-            raise ValueError(f"Invalid field: {field}")
-        
-        # Convert value for specific fields
-        if field == 'cost':
-            value = float(value) if value and value.strip() else None
-        elif field == 'renewing':
-            value = 1 if value == 'Yes' else 0
-        elif field in ['next_date', 'billing_cycle'] and not value.strip():
-            value = None
-            
-        cursor.execute(f'''
-            UPDATE subscriptions 
-            SET {field} = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (value, subscription_id))
-        
-        conn.commit()
-        conn.close()
 
 
 class SimpleWebServer(BaseHTTPRequestHandler):
@@ -691,15 +602,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         /* Status text */
         .status {{ color: #666; font-size: 14px; margin-bottom: 10px; }}
-        
-        /* Editable cell styling */
-        .editable, .editable-select {{ 
-            cursor: pointer; 
-            transition: background-color 0.2s;
-        }}
-        .editable:hover, .editable-select:hover {{ 
-            background-color: #f8f9fa; 
-        }}
     </style>
 </head>
 <body>
@@ -944,72 +846,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_header('Location', f'/?fetch_results={fetch_results}')
         self.end_headers()
 
-    def serve_emails_page(self, params):
-        """Serve emails listing page"""
-        page = int(params.get('page', ['1'])[0])
-        limit = 50
-        offset = (page - 1) * limit
-        
-        data = self.sm.get_processed_emails(limit, offset)
-        emails = data['emails']
-        total = data['total']
-        total_pages = (total + limit - 1) // limit
-        
-        # Generate email rows
-        email_rows = ""
-        for email in emails:
-            email_rows += f"""
-            <tr>
-                <td>{email['subject'][:50]}...</td>
-                <td>{email['sender'][:30]}...</td>
-                <td>{email['processed_at'][:16]}</td>
-                <td>{'Yes' if email['is_subscription'] else 'No'}</td>
-            </tr>
-            """
-        
-        # Generate pagination
-        pagination = ""
-        if page > 1:
-            pagination += f'<a href="/emails?page={page-1}"><button>Previous</button></a> '
-        if page < total_pages:
-            pagination += f'<a href="/emails?page={page+1}"><button>Next</button></a>'
-        
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Stored Emails</title>
-    <style>
-        body {{ font-family: "SF Mono", monospace; margin: 40px; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-        th {{ background-color: #f5f5f5; }}
-    </style>
-</head>
-<body>
-    <h1>Stored Emails</h1>
-    <p>Total: {total} emails | Page {page} of {total_pages}</p>
-    
-    <table>
-        <tr>
-            <th>Subject</th>
-            <th>Sender</th>
-            <th>Processed</th>
-            <th>Subscription</th>
-        </tr>
-        {email_rows}
-    </table>
-    
-    <p>{pagination}</p>
-    <a href="/"><button>Back to Dashboard</button></a>
-</body>
-</html>
-        """
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(html.encode())
 
     def format_datetime_nz(self, iso_datetime_str):
         """Convert ISO datetime to New Zealand timezone for display"""
@@ -1022,7 +858,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             # Format for display
             formatted = nz_dt.strftime('%d %b %Y %I:%M%p')
             # Remove leading zero from hour and fix am/pm case
-            import re
             formatted = re.sub(r' 0(\d):', r' \1:', formatted)
             return formatted.replace('AM', 'am').replace('PM', 'pm')
         except (ValueError, AttributeError):

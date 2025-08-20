@@ -283,18 +283,34 @@ class SubscriptionManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
+        # Debug: Check current database state
+        cursor.execute('SELECT COUNT(*) FROM processed_emails WHERE email = ?', (email,))
+        current_count = cursor.fetchone()[0]
+        print(f"  Current database has {current_count} emails for {email}")
+        
         new_messages = []
         duplicate_count = 0
+        debug_sample_new = []
+        debug_sample_dup = []
         
         for message in all_messages:
             msg_id = message['id']
-            cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ?', (msg_id,))
-            if cursor.fetchone():
+            cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ? AND email = ?', (msg_id, email))
+            result = cursor.fetchone()
+            if result:
                 duplicate_count += 1
+                if len(debug_sample_dup) < 3:
+                    debug_sample_dup.append(msg_id)
             else:
                 new_messages.append(message)
+                if len(debug_sample_new) < 3:
+                    debug_sample_new.append(msg_id)
         
         print(f"  {duplicate_count} already processed, {len(new_messages)} new emails to fetch")
+        if debug_sample_new:
+            print(f"  Sample new IDs: {debug_sample_new}")
+        if debug_sample_dup:
+            print(f"  Sample duplicate IDs: {debug_sample_dup}")
         
         if not new_messages:
             conn.close()
@@ -389,6 +405,17 @@ class SubscriptionManager:
                 sender = msg_headers.get('From', '')[:300]
                 sender_domain = self.extract_domain(sender)
                 
+                # Parse actual email date from Gmail headers
+                email_date_str = msg_headers.get('Date', '')
+                try:
+                    # Parse RFC 2822 date format from Gmail
+                    from email.utils import parsedate_to_datetime
+                    email_date = parsedate_to_datetime(email_date_str)
+                    received_at = email_date.isoformat()
+                except (ValueError, TypeError):
+                    # Fallback to processing time if date parsing fails
+                    received_at = datetime.now().isoformat()
+                
                 try:
                     cursor.execute('''
                         INSERT INTO processed_emails 
@@ -400,10 +427,11 @@ class SubscriptionManager:
                         msg_headers.get('Subject', '')[:500],
                         sender,
                         sender_domain,
-                        datetime.now().isoformat()
+                        received_at
                     ))
-                except sqlite3.IntegrityError:
-                    # Duplicate - that's fine, continue
+                except sqlite3.IntegrityError as e:
+                    # Debug: Track what emails are being caught as duplicates
+                    print(f"    IntegrityError for {msg_id}: {str(e)}")
                     pass
             
             return True
@@ -618,9 +646,11 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                         <div class="status" style="color: #008000;">{connections[0]["email"]}</div>
                     </div>
                     ''' if connected else '''
-                    <a href="/auth/gmail">
-                        <button>Connect Gmail</button>
-                    </a>
+                    <div style="text-align: right; padding-top: 10px;">
+                        <a href="/auth/gmail" style="text-decoration: none;">
+                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">connect gmail</button>
+                        </a>
+                    </div>
                     '''}
                 </div>
             </div>

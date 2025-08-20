@@ -85,6 +85,15 @@ class SubscriptionManager:
             )
         ''')
         
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS scratchpad (
+                id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
+                item TEXT NOT NULL,
+                processed BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         # Add columns to existing table if they don't exist
         try:
             cursor.execute('ALTER TABLE processed_emails ADD COLUMN sender_domain TEXT')
@@ -580,8 +589,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_oauth_callback(params)
         elif path == '/reset':
             self.handle_reset()
-        elif path.startswith('/api/subscriptions'):
-            self.handle_subscription_api(url, params, 'GET')
         else:
             self.send_error(404)
 
@@ -592,60 +599,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         if path == '/fetch':
             self.handle_metadata_fetch()
-        elif path.startswith('/api/subscriptions'):
-            self.handle_subscription_api(url, {}, 'POST')
         else:
             self.send_error(404)
 
 
-    def handle_subscription_api(self, url, params, method):
-        """Handle subscription API endpoints"""
-        import json
-        
-        path_parts = url.path.split('/')
-        # path_parts will be ['', 'api', 'subscriptions', ...] 
-        
-        try:
-            if method == 'POST' and len(path_parts) == 4:
-                # Create new subscription: POST /api/subscriptions
-                content_length = int(self.headers.get('Content-Length', 0))
-                post_data = self.rfile.read(content_length)
-                data = json.loads(post_data.decode('utf-8'))
-                
-                # Get current user email
-                connections = self.sm.get_connections()
-                if not connections:
-                    self.send_error(400, "No Gmail connection found")
-                    return
-                
-                email = connections[0]['email']
-                subscription_id = self.sm.create_subscription(email, data)
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"id": subscription_id}).encode())
-                
-            elif method == 'POST' and len(path_parts) == 5:
-                # Update subscription: POST /api/subscriptions/{id}
-                subscription_id = path_parts[4]
-                content_length = int(self.headers.get('Content-Length', 0))
-                post_data = self.rfile.read(content_length)
-                data = json.loads(post_data.decode('utf-8'))
-                
-                self.sm.update_subscription(subscription_id, data['field'], data['value'])
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"success": True}).encode())
-                
-            else:
-                self.send_error(404)
-                
-        except Exception as e:
-            print(f"API Error: {e}")
-            self.send_error(500, str(e))
 
     def serve_dashboard(self):
         """Serve two-panel dashboard"""
@@ -838,10 +795,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     def render_subscriptions_view(self):
         """Render subscriptions table"""
         subscriptions = self.sm.get_subscriptions()
-        return f"""
-            {self.render_subscriptions_table(subscriptions)}
-            {self.render_edit_javascript()}
-        """
+        return self.render_subscriptions_table(subscriptions)
     
     def render_emails_view(self):
         """Render emails table with back button"""
@@ -882,27 +836,18 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         """
     
     def render_subscriptions_table(self, subscriptions):
-        # Existing subscription rows
+        if not subscriptions:
+            return '<div style="height: 80vh; overflow-y: auto;"><p style="padding: 20px; color: #666;">No subscriptions yet. Add items to the scratchpad and process them to see subscriptions here.</p></div>'
+        
         rows = ""
         for sub in subscriptions:
-            rows += f"""<tr data-id="{sub['id']}">
-                <td class="editable" data-field="name">{sub['name']}</td>
-                <td class="editable" data-field="status">{sub['status']}</td>
-                <td class="editable" data-field="renewing">{'Yes' if sub.get('renewing') else 'No'}</td>
-                <td class="editable" data-field="cost">{sub.get('cost', '') or ''}</td>
-                <td class="editable" data-field="billing_cycle">{sub.get('billing_cycle', '') or ''}</td>
-                <td class="editable" data-field="next_date">{sub.get('next_date', '') or ''}</td>
-            </tr>"""
-        
-        # Add 20 empty rows for new entries
-        for i in range(20):
-            rows += """<tr>
-                <td class="editable" data-field="name"></td>
-                <td class="editable" data-field="status"></td>
-                <td class="editable" data-field="renewing"></td>
-                <td class="editable" data-field="cost"></td>
-                <td class="editable" data-field="billing_cycle"></td>
-                <td class="editable" data-field="next_date"></td>
+            rows += f"""<tr>
+                <td>{sub['name']}</td>
+                <td>{sub['status']}</td>
+                <td>{'Yes' if sub.get('renewing') else 'No'}</td>
+                <td>{sub.get('cost', '') or ''}</td>
+                <td>{sub.get('billing_cycle', '') or ''}</td>
+                <td>{sub.get('next_date', '') or ''}</td>
             </tr>"""
         
         return f"""<div style="height: 80vh; overflow-y: auto;">
@@ -921,102 +866,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             </table>
         </div>"""
 
-    def render_edit_javascript(self):
-        """JavaScript for table editing"""
-        return """
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.editable').forEach(cell => {
-                cell.addEventListener('click', function() {
-                    if (this.querySelector('input') || this.querySelector('select')) return;
-                    
-                    const originalValue = this.textContent.trim();
-                    const field = this.dataset.field;
-                    const row = this.closest('tr');
-                    const rowId = row.dataset.id;
-                    
-                    if (field === 'status' || field === 'renewing') {
-                        const select = document.createElement('select');
-                        select.style.cssText = 'width:100%;border:none;background:#f8f9fa;padding:4px';
-                        
-                        const options = field === 'status' ? ['', 'active', 'cancelled', 'paused'] : ['', 'Yes', 'No'];
-                        options.forEach(option => {
-                            const opt = document.createElement('option');
-                            opt.value = opt.textContent = option;
-                            if (option === originalValue) opt.selected = true;
-                            select.appendChild(opt);
-                        });
-                        
-                        this.innerHTML = '';
-                        this.appendChild(select);
-                        select.focus();
-                        
-                        const save = () => {
-                            const newValue = select.value;
-                            this.textContent = newValue;
-                            if (newValue !== originalValue) saveSubscription(rowId, field, newValue, row);
-                        };
-                        
-                        select.addEventListener('blur', save);
-                        select.addEventListener('change', save);
-                    } else {
-                        const input = document.createElement('input');
-                        input.type = field === 'cost' ? 'number' : 'text';
-                        input.value = originalValue;
-                        input.style.cssText = 'width:100%;border:none;background:#f8f9fa;padding:4px';
-                        
-                        this.innerHTML = '';
-                        this.appendChild(input);
-                        input.focus();
-                        
-                        const save = () => {
-                            const newValue = input.value.trim();
-                            this.textContent = newValue;
-                            if (newValue !== originalValue) saveSubscription(rowId, field, newValue, row);
-                        };
-                        
-                        input.addEventListener('blur', save);
-                        input.addEventListener('keypress', e => e.key === 'Enter' && save());
-                    }
-                });
-            });
-        });
-
-        async function saveSubscription(rowId, field, value, row) {
-            try {
-                if (rowId) {
-                    await fetch('/api/subscriptions/' + rowId, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({field, value})
-                    });
-                } else {
-                    const cells = row.querySelectorAll('td');
-                    const data = {
-                        name: cells[0].textContent.trim(),
-                        status: cells[1].textContent.trim(),
-                        renewing: cells[2].textContent.trim() === 'Yes',
-                        cost: cells[3].textContent.trim(),
-                        billing_cycle: cells[4].textContent.trim(),
-                        next_date: cells[5].textContent.trim()
-                    };
-                    
-                    if (data.name) {
-                        const response = await fetch('/api/subscriptions', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify(data)
-                        });
-                        const result = await response.json();
-                        row.dataset.id = result.id;
-                    }
-                }
-            } catch (error) {
-                console.error('Save failed:', error);
-            }
-        }
-        </script>
-        """
 
     def start_gmail_auth(self):
         """Redirect to Gmail OAuth"""

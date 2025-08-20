@@ -5,14 +5,14 @@ SQLite database schema for the Subscription Manager application.
 ## Schema Diagram
 
 ```
-┌─────────────────────┐    ┌─────────────────────────┐    ┌─────────────────────┐
-│    connections      │    │   processed_emails      │    │   subscriptions     │
-├─────────────────────┤    ├─────────────────────────┤    ├─────────────────────┤
-│ id (TEXT)           │    │ id (TEXT)               │    │ id (TEXT)           │
-│ email (TEXT) ◄──────┼────┤ email (TEXT)            │◄───┤ email (TEXT)        │
-│ access_token (TEXT) │    │ gmail_message_id (TEXT) │    │ name (TEXT)         │
-│ refresh_token (TEXT)│    │ subject (TEXT)          │    │ domain (TEXT) ◄─────┼─┐
-│ token_expiry        │    │ sender (TEXT)           │    │ status (TEXT)       │ │
+┌─────────────────────┐    ┌─────────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│    connections      │    │   processed_emails      │    │   subscriptions     │    │     scratchpad      │
+├─────────────────────┤    ├─────────────────────────┤    ├─────────────────────┤    ├─────────────────────┤
+│ id (TEXT)           │    │ id (TEXT)               │    │ id (TEXT)           │    │ id (TEXT)           │
+│ email (TEXT) ◄──────┼────┤ email (TEXT)            │◄───┤ email (TEXT)        │    │ item (TEXT)         │
+│ access_token (TEXT) │    │ gmail_message_id (TEXT) │    │ name (TEXT)         │    │ processed (BOOLEAN) │
+│ refresh_token (TEXT)│    │ subject (TEXT)          │    │ domain (TEXT) ◄─────┼─┐  │ created_at          │
+│ token_expiry        │    │ sender (TEXT)           │    │ status (TEXT)       │ │  └─────────────────────┘
 │ history_id (TEXT)   │    │ sender_domain (TEXT) ───┼────┤ renewing (BOOLEAN)  │ │
 │ last_sync_at        │    │ received_at             │    │ cost (DECIMAL)      │ │
 │ is_active (BOOLEAN) │    │ processed_at            │    │ billing_cycle (TEXT)│ │
@@ -73,6 +73,15 @@ SQLite database schema for the Subscription Manager application.
 | next_date     | DATE         | -                                 | Next billing or expiry date          |
 | created_at    | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP         | When subscription was added           |
 | updated_at    | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP         | Last update timestamp                 |
+
+### scratchpad
+
+| Column     | Type      | Constraints                        | Description                           |
+|------------|-----------|-----------------------------------|---------------------------------------|
+| id         | TEXT      | PRIMARY KEY, DEFAULT randomblob   | Unique scratchpad item identifier     |
+| item       | TEXT      | NOT NULL                          | User-entered subscription info        |
+| processed  | BOOLEAN   | DEFAULT 0                         | Whether item has been parsed          |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | When item was added                   |
 
 ## Relationships
 

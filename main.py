@@ -9,6 +9,8 @@ import sqlite3
 import json
 import requests
 import re
+import threading
+import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, parse_qs, urlparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -21,9 +23,44 @@ import pytz
 # Load environment variables
 load_dotenv()
 
-class SubscriptionManager:
+class JobManager:
+    """Manages background jobs for long-running operations"""
     def __init__(self):
+        self.jobs = {}
+        self.lock = threading.Lock()
+    
+    def create_job(self, job_type):
+        """Create a new job and return its ID"""
+        job_id = f"job_{uuid.uuid4().hex[:8]}"
+        
+        with self.lock:
+            self.jobs[job_id] = {
+                "id": job_id,
+                "type": job_type,
+                "status": "running",
+                "started_at": datetime.now().isoformat(),
+                "progress": {},
+                "result": None,
+                "error": None
+            }
+        
+        return job_id
+    
+    def update_job(self, job_id, updates):
+        """Update job information (thread-safe)"""
+        with self.lock:
+            if job_id in self.jobs:
+                self.jobs[job_id].update(updates)
+    
+    def get_job(self, job_id):
+        """Get job information (thread-safe)"""
+        with self.lock:
+            return self.jobs.get(job_id, None)
+
+class SubscriptionManager:
+    def __init__(self, job_manager=None):
         self.db_path = "subscriptions.db"
+        self.job_manager = job_manager
         self.init_database()
         
         self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
@@ -207,12 +244,18 @@ class SubscriptionManager:
         conn.close()
         return access_token
 
-    def fetch_year_of_emails(self, email: str, years_back: int = 1):
+    def fetch_year_of_emails(self, email: str, years_back: int = 1, job_id=None):
         """Simple approach: Get message IDs from last year, then fetch in small batches with retry"""
         start_time = time.time()
         
         # Step 1: Get all message IDs from the last year
         print(f"Step 1: Getting message IDs from last {years_back} year(s)...")
+        
+        # Update job progress if job_id provided
+        if job_id and self.job_manager:
+            self.job_manager.update_job(job_id, {
+                "progress": {"step": "Getting message IDs", "current": 0, "total": 0}
+            })
         
         access_token = self.get_valid_access_token(email)
         headers = {'Authorization': f'Bearer {access_token}'}
@@ -302,6 +345,18 @@ class SubscriptionManager:
             batch_num = (i // batch_size) + 1
             total_batches = (len(new_messages) + batch_size - 1) // batch_size
             
+            # Update job progress
+            if job_id and self.job_manager:
+                self.job_manager.update_job(job_id, {
+                    "progress": {
+                        "step": "Fetching email metadata",
+                        "current_batch": batch_num,
+                        "total_batches": total_batches,
+                        "emails_processed": stored_count,
+                        "total_emails": len(new_messages)
+                    }
+                })
+            
             # Simple retry logic - if batch fails, retry up to 3 times
             for attempt in range(3):
                 success = self.process_batch_simple(batch, email, cursor)
@@ -346,6 +401,14 @@ class SubscriptionManager:
             "errors": error_count,
             "time": round(total_time, 1)
         }
+        
+        # Update job with final results
+        if job_id and self.job_manager:
+            self.job_manager.update_job(job_id, {
+                "status": "completed",
+                "result": result,
+                "completed_at": datetime.now().isoformat()
+            })
         
         print(f"\nComplete! Processed {len(all_messages)} emails in {total_time:.1f} seconds")
         print(f"  Stored: {stored_count}, Duplicates: {duplicate_count}, Errors: {error_count}")
@@ -483,8 +546,9 @@ class SubscriptionManager:
 
 
 class SimpleWebServer(BaseHTTPRequestHandler):
-    def __init__(self, subscription_manager, *args, **kwargs):
+    def __init__(self, subscription_manager, job_manager, *args, **kwargs):
         self.sm = subscription_manager
+        self.job_manager = job_manager
         super().__init__(*args, **kwargs)
 
     def do_GET(self):
@@ -851,7 +915,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.wfile.write(response_json.encode())
 
     def api_fetch_emails(self):
-        """Core email fetch logic - returns structured data"""
+        """Start email fetch in background and return job ID"""
         # Get active connection
         connections = self.sm.get_connections()
         if not connections:
@@ -862,13 +926,30 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         email = connections[0]['email']
         
-        # Run simplified fetch for 1 year
-        result = self.sm.fetch_year_of_emails(email, years_back=1)
+        # Create background job
+        job_id = self.job_manager.create_job("email_fetch")
+        
+        # Start fetch in background thread
+        def run_fetch():
+            try:
+                result = self.sm.fetch_year_of_emails(email, years_back=1, job_id=job_id)
+            except Exception as e:
+                # Update job with error
+                self.job_manager.update_job(job_id, {
+                    "status": "failed",
+                    "error": str(e),
+                    "completed_at": datetime.now().isoformat()
+                })
+        
+        thread = threading.Thread(target=run_fetch)
+        thread.daemon = True  # Don't block app shutdown
+        thread.start()
         
         return {
             "success": True,
-            "message": f"Fetched {result.get('stored', 0)} new emails",
-            "data": result
+            "job_id": job_id,
+            "message": "Email fetch started in background",
+            "note": "This may take 10-30 minutes depending on email volume"
         }
 
     def handle_metadata_fetch(self):
@@ -933,22 +1014,23 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in separate threads to prevent blocking"""
     pass
 
-def create_handler(subscription_manager):
-    """Create request handler with subscription manager"""
+def create_handler(subscription_manager, job_manager):
+    """Create request handler with subscription manager and job manager"""
     def handler(*args, **kwargs):
-        SimpleWebServer(subscription_manager, *args, **kwargs)
+        SimpleWebServer(subscription_manager, job_manager, *args, **kwargs)
     return handler
 
 def main():
     """Main function to start the application"""
     print("🚀 Starting Simple Subscription Manager...")
     
-    # Initialize subscription manager
-    sm = SubscriptionManager()
+    # Initialize job manager and subscription manager
+    job_manager = JobManager()
+    sm = SubscriptionManager(job_manager)
     
     # Create threaded web server
     server_address = ('', sm.port)
-    httpd = ThreadedHTTPServer(server_address, create_handler(sm))
+    httpd = ThreadedHTTPServer(server_address, create_handler(sm, job_manager))
     
     print(f"✅ Server running at http://localhost:{sm.port}")
     print("   Visit the URL above to use the application")

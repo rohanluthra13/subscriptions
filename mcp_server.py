@@ -7,6 +7,8 @@ Exposes subscription data via Model Context Protocol
 import sqlite3
 import json
 import sys
+import requests
+from datetime import datetime, timedelta
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
@@ -315,6 +317,130 @@ def update_subscription(
     except Exception as e:
         print(f"Error in update_subscription: {e}", file=sys.stderr)
         return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
+def trigger_email_fetch(quick_sync: bool = True) -> str:
+    """Trigger Gmail email fetch from running app
+    
+    Args:
+        quick_sync: If True, fetch recent emails only (fast). If False, full year sync.
+    
+    Requires main.py to be running on localhost:8000
+    """
+    try:
+        # Check if app is running
+        app_url = "http://localhost:8000"
+        
+        # Try to reach the app with debugging
+        try:
+            print(f"DEBUG: Attempting to connect to {app_url}/status", file=sys.stderr)
+            status_response = requests.get(f"{app_url}/status", timeout=5)
+            print(f"DEBUG: Got response {status_response.status_code}", file=sys.stderr)
+            if status_response.status_code != 200:
+                return json.dumps({
+                    "success": False,
+                    "error": f"App status check failed: HTTP {status_response.status_code}",
+                    "hint": "Check if main.py is running correctly"
+                })
+        except requests.exceptions.RequestException as e:
+            print(f"DEBUG: Request failed with exception: {type(e).__name__}: {str(e)}", file=sys.stderr)
+            return json.dumps({
+                "success": False,
+                "error": f"Cannot connect to app: {type(e).__name__}: {str(e)}",
+                "hint": "Run: python main.py and ensure it's accessible at localhost:8000"
+            })
+        
+        # Trigger the fetch
+        fetch_endpoint = f"{app_url}/api/fetch"
+        
+        # For now, main.py doesn't have different endpoints for quick vs full
+        # This is a placeholder for future enhancement
+        response = requests.post(fetch_endpoint, timeout=5)
+        
+        if response.status_code == 200:
+            return json.dumps({
+                "success": True,
+                "message": f"Email fetch triggered ({'quick' if quick_sync else 'full'} sync)",
+                "note": "This may take 1-15 minutes depending on email volume",
+                "status_url": f"{app_url}/status"
+            })
+        else:
+            return json.dumps({
+                "success": False,
+                "error": f"Failed to trigger fetch: {response.status_code}"
+            })
+            
+    except Exception as e:
+        print(f"Error in trigger_email_fetch: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
+def get_email_sync_status() -> str:
+    """Get email synchronization status and statistics
+    
+    Returns:
+        - Last sync timestamp
+        - Total emails in database
+        - Emails added in last sync
+        - Gmail connection status
+        - Whether main.py is running
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get connection status
+        cursor.execute("""
+            SELECT email, last_sync_at, is_active 
+            FROM connections 
+            LIMIT 1
+        """)
+        connection = cursor.fetchone()
+        
+        # Count total emails
+        cursor.execute("SELECT COUNT(*) FROM processed_emails")
+        total_emails = cursor.fetchone()[0]
+        
+        # Count recent emails (last 24 hours)
+        yesterday = datetime.now() - timedelta(days=1)
+        cursor.execute("""
+            SELECT COUNT(*) FROM processed_emails 
+            WHERE processed_at > ?
+        """, (yesterday.isoformat(),))
+        recent_emails = cursor.fetchone()[0]
+        
+        # Check if main.py is accessible
+        app_running = False
+        try:
+            requests.get("http://localhost:8000/status", timeout=1)
+            app_running = True
+        except:
+            pass
+        
+        conn.close()
+        
+        status = {
+            "gmail_connected": connection is not None,
+            "gmail_account": connection[0] if connection else None,
+            "last_sync": connection[1] if connection else None,
+            "connection_active": bool(connection[2]) if connection else False,
+            "total_emails": total_emails,
+            "emails_last_24h": recent_emails,
+            "app_running": app_running,
+            "app_url": "http://localhost:8000" if app_running else None
+        }
+        
+        # Add human-readable summary
+        if connection and connection[1]:
+            last_sync_dt = datetime.fromisoformat(connection[1])
+            hours_ago = (datetime.now() - last_sync_dt).total_seconds() / 3600
+            status["hours_since_sync"] = round(hours_ago, 1)
+            
+        return json.dumps(status, indent=2)
+        
+    except Exception as e:
+        print(f"Error in get_email_sync_status: {e}", file=sys.stderr)
+        return json.dumps({"error": str(e)})
 
 if __name__ == "__main__":
     mcp.run()

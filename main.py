@@ -12,6 +12,7 @@ import re
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, parse_qs, urlparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from dotenv import load_dotenv
 from email.utils import parsedate_to_datetime
 import time
@@ -494,6 +495,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         if path == '/':
             self.serve_dashboard()
+        elif path == '/status':
+            self.handle_status_api()
         elif path == '/auth/gmail':
             self.start_gmail_auth()
         elif path == '/auth/callback':
@@ -510,6 +513,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         if path == '/fetch':
             self.handle_metadata_fetch()
+        elif path == '/api/fetch':
+            self.handle_api_fetch()
         else:
             self.send_error(404)
 
@@ -821,30 +826,83 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_header('Location', '/?connected=1')
         self.end_headers()
 
-    def handle_metadata_fetch(self):
-        """Handle metadata fetch request"""
+    def handle_status_api(self):
+        """Handle status API request (returns JSON)"""
+        connections = self.sm.get_connections()
+        email_count = self.sm.get_email_count()
+        
+        # Check if app is accessible (always true since we're running)
+        status_data = {
+            "status": "running",
+            "gmail_connected": len(connections) > 0,
+            "gmail_account": connections[0]["email"] if connections else None,
+            "last_sync": connections[0]["last_sync_at"] if connections else None,
+            "connection_active": bool(connections[0]["is_active"]) if connections else False,
+            "total_emails": email_count,
+            "app_url": f"http://localhost:{self.sm.port}"
+        }
+        
+        response_json = json.dumps(status_data, indent=2)
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Content-length', str(len(response_json)))
+        self.end_headers()
+        self.wfile.write(response_json.encode())
+
+    def api_fetch_emails(self):
+        """Core email fetch logic - returns structured data"""
         # Get active connection
         connections = self.sm.get_connections()
         if not connections:
-            self.send_error(400, "No Gmail connection found")
-            return
+            return {
+                "success": False,
+                "error": "No Gmail connection found"
+            }
         
         email = connections[0]['email']
         
         # Run simplified fetch for 1 year
         result = self.sm.fetch_year_of_emails(email, years_back=1)
         
+        return {
+            "success": True,
+            "message": f"Fetched {result.get('stored', 0)} new emails",
+            "data": result
+        }
+
+    def handle_metadata_fetch(self):
+        """Handle metadata fetch request (web interface)"""
+        result = self.api_fetch_emails()
+        
+        if not result["success"]:
+            self.send_error(400, result.get("error", "Unknown error"))
+            return
+        
         # Format results for display
-        fetch_results = f"fetched: {result.get('stored', 0)} new"
-        if result.get('duplicates', 0) > 0:
-            fetch_results += f", {result.get('duplicates', 0)} duplicates"
-        if result.get('errors', 0) > 0:
-            fetch_results += f", {result.get('errors', 0)} errors"
+        data = result["data"]
+        fetch_results = f"fetched: {data.get('stored', 0)} new"
+        if data.get('duplicates', 0) > 0:
+            fetch_results += f", {data.get('duplicates', 0)} duplicates"
+        if data.get('errors', 0) > 0:
+            fetch_results += f", {data.get('errors', 0)} errors"
         
         # Redirect back to dashboard with results in URL
         self.send_response(302)
         self.send_header('Location', f'/?fetch_results={fetch_results}')
         self.end_headers()
+
+    def handle_api_fetch(self):
+        """Handle API fetch request (returns JSON)"""
+        result = self.api_fetch_emails()
+        
+        response_json = json.dumps(result, indent=2)
+        
+        self.send_response(200 if result["success"] else 400)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Content-length', str(len(response_json)))
+        self.end_headers()
+        self.wfile.write(response_json.encode())
 
 
     def format_datetime_nz(self, iso_datetime_str):
@@ -871,6 +929,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.end_headers()
 
 
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """Handle requests in separate threads to prevent blocking"""
+    pass
+
 def create_handler(subscription_manager):
     """Create request handler with subscription manager"""
     def handler(*args, **kwargs):
@@ -884,9 +946,9 @@ def main():
     # Initialize subscription manager
     sm = SubscriptionManager()
     
-    # Create web server
+    # Create threaded web server
     server_address = ('', sm.port)
-    httpd = HTTPServer(server_address, create_handler(sm))
+    httpd = ThreadedHTTPServer(server_address, create_handler(sm))
     
     print(f"✅ Server running at http://localhost:{sm.port}")
     print("   Visit the URL above to use the application")

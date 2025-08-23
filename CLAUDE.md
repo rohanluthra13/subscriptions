@@ -26,16 +26,19 @@ rm subscriptions.db
 
 ## Current Architecture
 
-**Single-file Python app** (`main.py` - ~1000 lines)
+**Single-file Python app** (`main.py` - ~1100 lines)
 - SQLite database for local storage
 - Gmail API integration with OAuth
+- Multi-threaded HTTP server with background jobs
 - Simple web UI for viewing results
+- MCP server integration for AI agent interaction
 - Domain-based subscription detection
 
-**Future MCP Integration** (see `docs/` folder)
-- Expose subscription data via MCP protocol
-- Allow AI agents to query and manage subscriptions
-- Maintain local storage but enable AI interaction
+**MCP Integration** (active - see `mcp_server.py`)
+- Expose subscription data via MCP protocol  
+- AI agents can query and manage subscriptions
+- Background job system for long-running operations
+- Local storage with AI interaction capability
 
 ## File Structure
 
@@ -75,10 +78,11 @@ OPENAI_MODEL=gpt-4o-mini
 
 ## Development Notes
 
-- Single-file architecture - everything in `main.py`
+- Single-file architecture - everything in `main.py` 
 - Direct SQL queries - no ORM complexity
-- Embedded web server - no framework dependencies
+- Multi-threaded HTTP server with background job management
 - Local-first - works offline except for API calls
+- MCP server enables AI agent integration
 
 ## Key Database Tables
 

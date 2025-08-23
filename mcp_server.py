@@ -375,15 +375,15 @@ def trigger_email_fetch(quick_sync: bool = True) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
-def get_email_sync_status() -> str:
-    """Get email synchronization status and statistics
+def get_email_status() -> str:
+    """Get email system status and statistics
     
     Returns:
-        - Last sync timestamp
+        - Gmail connection status and account
         - Total emails in database
-        - Emails added in last sync
-        - Gmail connection status
-        - Whether main.py is running
+        - Recent email activity (last 24h)
+        - Last sync timestamp
+        - Whether main.py server is running
     """
     try:
         conn = get_db_connection()
@@ -439,7 +439,7 @@ def get_email_sync_status() -> str:
         return json.dumps(status, indent=2)
         
     except Exception as e:
-        print(f"Error in get_email_sync_status: {e}", file=sys.stderr)
+        print(f"Error in get_email_status: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
 if __name__ == "__main__":

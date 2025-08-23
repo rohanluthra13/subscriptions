@@ -8,7 +8,7 @@ Implement multi-threading to keep the HTTP server responsive while processing lo
 
 ## Implementation Steps
 
-### Step 1: Make HTTP Server Multi-Threaded (5 minutes)
+### Step 1: Make HTTP Server Multi-Threaded (5 minutes) ✅ COMPLETED
 **Goal:** Allow the server to handle multiple requests simultaneously
 
 **Changes:**
@@ -19,7 +19,7 @@ Implement multi-threading to keep the HTTP server responsive while processing lo
 **Testing:**
 - Start email fetch via web UI
 - While fetch is running, verify `/status` endpoint responds
-- Confirm MCP `get_email_sync_status` tool works during fetch
+- Confirm MCP `get_email_status` tool works during fetch
 
 **Success Criteria:**
 - HTTP endpoints respond during email fetch
@@ -109,7 +109,7 @@ jobs = {
 
 **MCP Tool Updates:**
 - Update `trigger_email_fetch` to return job ID
-- Enhance `get_email_sync_status` to check for active jobs
+- Enhance `get_email_status` to check for active jobs
 - Add progress information to status response
 
 **Error Handling:**

@@ -333,8 +333,27 @@ class SubscriptionManager:
             print(f"  Sample duplicate IDs: {debug_sample_dup}")
         
         if not new_messages:
+            # Update last_sync_at even when no new emails found
+            cursor.execute('''
+                UPDATE connections 
+                SET last_sync_at = ?
+                WHERE email = ?
+            ''', (datetime.now().isoformat(), email))
+            conn.commit()
             conn.close()
-            return {"fetched": len(all_messages), "stored": 0, "duplicates": duplicate_count, "errors": 0, "time": 0}
+            
+            total_time = time.time() - start_time
+            result = {"fetched": len(all_messages), "stored": 0, "duplicates": duplicate_count, "errors": 0, "time": round(total_time, 1)}
+            
+            # Update job with final results if job_id provided
+            if job_id and self.job_manager:
+                self.job_manager.update_job(job_id, {
+                    "status": "completed", 
+                    "result": result,
+                    "completed_at": datetime.now().isoformat()
+                })
+            
+            return result
         
         # Step 3: Process in small batches with simple retry
         print(f"Step 3: Fetching metadata for {len(new_messages)} emails...")

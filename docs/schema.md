@@ -2,7 +2,7 @@
 
 SQLite database schema for the Subscription Manager application.
 
-## Schema Diagram
+## Schema Diagram (Actual Implementation)
 
 ```
 ┌─────────────────────────────────┐
@@ -13,48 +13,43 @@ SQLite database schema for the Subscription Manager application.
 │ access_token (TEXT)             │
 │ refresh_token (TEXT)            │
 │ token_expiry (TIMESTAMP)        │
-│ history_id (TEXT)               │
 │ last_sync_at (TIMESTAMP)        │
 │ is_active (BOOLEAN)             │
 │ created_at (TIMESTAMP)          │
 └─────────────────────────────────┘
-             │
-             │ connection_id (FK)
-             ▼
+
 ┌─────────────────────────────────┐          ┌─────────────────────────────────┐
 │      processed_emails           │          │        subscriptions            │
 ├─────────────────────────────────┤          ├─────────────────────────────────┤
 │ id (TEXT) PK                    │          │ id (TEXT) PK                    │
-│ connection_id (TEXT) FK         │          │ name (TEXT) UNIQUE              │
+│ email (TEXT)                    │          │ name (TEXT) UNIQUE              │
 │ gmail_message_id (TEXT) UNIQUE  │          │ domains (TEXT/JSON)             │
 │ subject (TEXT)                  │          │ category (TEXT)                 │
-│ sender_email (TEXT)             │          │ cost (DECIMAL)                  │
-│ sender_domain (TEXT) ───────────┼─────────▶│ currency (TEXT)                 │
-│ sender_name (TEXT)              │  match   │ billing_cycle (TEXT)            │
-│ received_at (TIMESTAMP)         │  domain  │ status (TEXT)                   │
-│ subscription_id (TEXT) FK ──────┼─────────▶│ auto_renewing (BOOLEAN)         │
-│ match_confidence (DECIMAL)      │          │ next_billing_date (DATE)        │
-│ is_payment_receipt (BOOLEAN)    │          │ cancellation_date (DATE)        │
-│ extracted_amount (DECIMAL)      │          │ notes (TEXT)                    │
-│ processed_at (TIMESTAMP)        │          │ created_by (TEXT)               │
-└─────────────────────────────────┘          │ created_at (TIMESTAMP)          │
+│ sender (TEXT)                   │          │ cost (DECIMAL)                  │
+│ sender_domain (TEXT)            │          │ currency (TEXT)                 │
+│ received_at (TIMESTAMP)         │          │ billing_cycle (TEXT)            │
+│ processed_at (TIMESTAMP)        │          │ status (TEXT)                   │
+│ content (TEXT)                  │          │ auto_renewing (BOOLEAN)         │
+│ content_fetched (BOOLEAN)       │          │ next_billing_date (DATE)        │
+└─────────────────────────────────┘          │ notes (TEXT)                    │
+                                              │ next_billing_date (DATE)        │
+                                              │ notes (TEXT)                    │
+                                              │ created_by (TEXT)               │
+                                              │ created_at (TIMESTAMP)          │
                                               │ updated_at (TIMESTAMP)          │
                                               └─────────────────────────────────┘
-                                                         ▲
-                                                         │ subscription_id (FK)
-                                                         │
-                                              ┌──────────┴──────────────────────┐
-                                              │         scratchpad              │
-                                              ├─────────────────────────────────┤
-                                              │ id (TEXT) PK                    │
-                                              │ raw_text (TEXT)                 │
-                                              │ parsed_name (TEXT)              │
-                                              │ parsed_cost (DECIMAL)           │
-                                              │ parsed_cycle (TEXT)             │
-                                              │ subscription_id (TEXT) FK       │
-                                              │ created_at (TIMESTAMP)          │
-                                              └─────────────────────────────────┘
+
+┌─────────────────────────────────┐
+│         scratchpad              │
+├─────────────────────────────────┤
+│ id (TEXT) PK                    │
+│ item (TEXT)                     │
+│ processed (BOOLEAN)             │
+│ created_at (TIMESTAMP)          │
+└─────────────────────────────────┘
 ```
+
+Note: Tables are independent - no formal foreign key relationships implemented
 
 ## Tables
 
@@ -67,28 +62,24 @@ SQLite database schema for the Subscription Manager application.
 | access_token  | TEXT      | NOT NULL                          | OAuth 2.0 access token               |
 | refresh_token | TEXT      | NOT NULL                          | OAuth 2.0 refresh token              |
 | token_expiry  | TIMESTAMP | NOT NULL                          | When access token expires            |
-| history_id    | TEXT      | -                                 | Gmail API history tracking           |
 | last_sync_at  | TIMESTAMP | -                                 | Last email synchronization time      |
 | is_active     | BOOLEAN   | DEFAULT 1                         | Whether connection is active          |
 | created_at    | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | Connection creation timestamp         |
 
 ### processed_emails
 
-| Column              | Type        | Constraints                           | Description                              |
-|---------------------|-------------|---------------------------------------|------------------------------------------|
-| id                  | TEXT        | PRIMARY KEY, DEFAULT randomblob       | Unique email record identifier           |
-| connection_id       | TEXT        | NOT NULL                              | Link to Gmail connection                 |
-| gmail_message_id    | TEXT        | UNIQUE NOT NULL                       | Gmail's unique message identifier        |
-| subject             | TEXT        | -                                     | Email subject line                      |
-| sender_email        | TEXT        | -                                     | Full sender email address               |
-| sender_domain       | TEXT        | -                                     | Extracted domain from sender email      |
-| sender_name         | TEXT        | -                                     | Display name of sender                  |
-| received_at         | TIMESTAMP   | -                                     | When email was originally received       |
-| subscription_id     | TEXT        | -                                     | Matched subscription (if identified)    |
-| match_confidence    | DECIMAL(3,2)| -                                     | Confidence of subscription match (0-1)  |
-| is_payment_receipt  | BOOLEAN     | DEFAULT 0                             | Whether email is a payment receipt      |
-| extracted_amount    | DECIMAL(10,2)| -                                    | Payment amount extracted from email     |
-| processed_at        | TIMESTAMP   | DEFAULT CURRENT_TIMESTAMP             | When record was created                  |
+| Column            | Type      | Constraints                        | Description                           |
+|-------------------|-----------|-----------------------------------|---------------------------------------|
+| id                | TEXT      | PRIMARY KEY, DEFAULT randomblob   | Unique email record identifier        |
+| email             | TEXT      | NOT NULL                          | Gmail account that fetched this email |
+| gmail_message_id  | TEXT      | UNIQUE NOT NULL                   | Gmail's unique message identifier     |
+| subject           | TEXT      | -                                 | Email subject line                    |
+| sender            | TEXT      | -                                 | Full sender info (name + email)      |
+| sender_domain     | TEXT      | -                                 | Extracted domain from sender email   |
+| received_at       | TIMESTAMP | -                                 | When email was originally received    |
+| processed_at      | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | When record was created               |
+| content           | TEXT      | -                                 | Full email body content (HTML/text)  |
+| content_fetched   | BOOLEAN   | DEFAULT 0                         | Whether content has been fetched     |
 
 ### subscriptions
 
@@ -104,7 +95,6 @@ SQLite database schema for the Subscription Manager application.
 | status            | TEXT         | DEFAULT 'active'                  | active/cancelled/trial/paused                   |
 | auto_renewing     | BOOLEAN      | DEFAULT 1                         | Whether subscription auto-renews                |
 | next_billing_date | DATE         | -                                 | Next expected charge date                       |
-| cancellation_date | DATE         | -                                 | When subscription was/will be cancelled         |
 | notes             | TEXT         | -                                 | Additional notes or information                 |
 | created_by        | TEXT         | DEFAULT 'user'                    | Origin: user/gmail_import/llm                   |
 | created_at        | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP         | When subscription was added                     |
@@ -115,21 +105,16 @@ SQLite database schema for the Subscription Manager application.
 | Column          | Type      | Constraints                        | Description                              |
 |-----------------|-----------|-----------------------------------|------------------------------------------|
 | id              | TEXT      | PRIMARY KEY, DEFAULT randomblob   | Unique scratchpad item identifier        |
-| raw_text        | TEXT      | NOT NULL                          | User-entered subscription info           |
-| parsed_name     | TEXT      | -                                 | LLM-extracted subscription name          |
-| parsed_cost     | DECIMAL(10,2) | -                             | LLM-extracted cost                      |
-| parsed_cycle    | TEXT      | -                                 | LLM-extracted billing cycle             |
-| subscription_id | TEXT      | -                                 | Link to created subscription (if converted) |
+| item            | TEXT      | NOT NULL                          | User-entered subscription info           |
+| processed       | BOOLEAN   | DEFAULT 0                         | Whether item has been processed         |
 | created_at      | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | When item was added                      |
 
 ## Relationships
 
-```
-connections.id ←── processed_emails.connection_id
-processed_emails.subscription_id ──→ subscriptions.id
-processed_emails.sender_domain ←→ subscriptions.domains (JSON array match)
-scratchpad.subscription_id ──→ subscriptions.id
-```
+No formal foreign key relationships are implemented. Tables are independent but logically related:
+- `processed_emails.email` indicates which Gmail account fetched the email
+- `processed_emails.sender_domain` can be matched against `subscriptions.domains` (JSON array)
+- Domain matching happens at query time rather than through database constraints
 
 ## Key Design Principles
 
@@ -138,7 +123,7 @@ scratchpad.subscription_id ──→ subscriptions.id
 3. **Domains are optional**: Stored as JSON array for flexibility
 4. **Emails provide evidence**: They support and validate subscriptions but aren't required
 
-## Indexes
+## Constraints
 
 - UNIQUE(connections.email) - One connection per email account
 - UNIQUE(subscriptions.name) - No duplicate subscription names

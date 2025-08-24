@@ -21,31 +21,38 @@ Incomplete Subscriptions → Email Analysis → Complete Subscriptions
 - ✅ User braindump → structured subscriptions (via MCP tools)
 - ✅ Gmail OAuth + email metadata ingestion pipeline 
 - ✅ GUI trigger for email metadata fetch
+- ✅ MCP tools: get_subscriptions, add_subscription, update_subscription
+- ✅ MCP tool for triggering email fetch (trigger_email_fetch)
+- ✅ MCP tool for email status (get_email_status)
+- ✅ Background job system for long-running operations
+- ✅ Domain extraction and clustering from email metadata
 
 ### Missing Components
 - 🔴 Email content reading (bodies, not just metadata)
-- 🔴 MCP tool for triggering email fetch
 - 🔴 Email filtering logic (identify subscription-relevant emails)
 - 🔴 Content analysis prompts for data extraction
+- 🔴 Automatic subscription enrichment workflow
 
 ## Implementation Phases
 
-### Phase 1: MCP Email Fetch Tool (Quick Win)
+### Phase 1: MCP Email Fetch Tool ✅ COMPLETED
 **Goal**: LLM can trigger email refresh autonomously
-- Add `trigger_email_fetch()` MCP tool
-- Calls existing Gmail metadata pipeline
-- Returns status/count of new emails processed
+- ✅ `trigger_email_fetch()` MCP tool implemented
+- ✅ Calls existing Gmail metadata pipeline
+- ✅ Returns job ID for background processing
+- ✅ `get_email_status()` tool for checking connection/stats
 
-### Phase 2: Email Content Reading (Core Capability)
+### Phase 2: Email Content Reading (Core Capability) 🔴 CRITICAL BLOCKER
 **Goal**: Access full email bodies for analysis
-- Extend Gmail API calls to fetch email content
-- Store email bodies in `processed_emails` table
-- Handle HTML/text content appropriately
+- Modify `process_batch_simple()` to use `format=full` instead of `format=metadata`
+- Add `content` field to `processed_emails` table
+- Parse email body from Gmail API response (handle text/html parts)
+- Consider storage implications (bodies are ~10-100x larger than metadata)
 
-**Key Questions**:
-- Can current Gmail API setup read full email bodies?
-- Storage implications for email content
-- Privacy/security considerations
+**Implementation Notes**:
+- Gmail OAuth scope already supports content reading (`gmail.readonly`)
+- Infrastructure exists (batch processing, retry logic, background jobs)
+- Main change needed: Line 450 in main.py, change API format parameter
 
 ### Phase 3: Smart Email Filtering (Efficiency) 
 **Goal**: LLM identifies subscription-relevant emails before reading content
@@ -92,5 +99,23 @@ Incomplete Subscriptions → Email Analysis → Complete Subscriptions
 3. **Efficiency**: Process only relevant emails (not all email history)
 4. **Completeness**: Fill in missing data fields for existing subscriptions
 
-## Current Blocker
-**Email Content Reading** - Need to extend Gmail API integration to fetch email bodies, not just metadata. This is the critical path for all subsequent phases.
+## Current Status & Next Steps
+
+### ✅ What's Working
+- Complete MCP server with 5 tools (subscriptions CRUD + email operations)
+- Gmail OAuth and metadata ingestion for 1 year of emails
+- Background job system for long-running operations
+- Web UI at localhost:8000 for manual control
+- Domain extraction and clustering from email senders
+
+### 🔴 Critical Blocker: Email Content Reading
+**The single change needed**: Modify line 450 in `main.py`:
+```python
+# Current (metadata only):
+url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?format=metadata'
+
+# Needed (full content):
+url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?format=full'
+```
+
+Then add content storage and parsing. This unblocks the entire enrichment pipeline.

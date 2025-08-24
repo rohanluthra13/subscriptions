@@ -81,7 +81,6 @@ class SubscriptionManager:
                 access_token TEXT NOT NULL,
                 refresh_token TEXT NOT NULL,
                 token_expiry TIMESTAMP NOT NULL,
-                history_id TEXT,
                 last_sync_at TIMESTAMP,
                 is_active BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -97,7 +96,9 @@ class SubscriptionManager:
                 sender TEXT,
                 sender_domain TEXT,
                 received_at TIMESTAMP,
-                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                content TEXT,
+                content_fetched BOOLEAN DEFAULT 0
             )
         ''')
         
@@ -137,6 +138,22 @@ class SubscriptionManager:
         
         try:
             cursor.execute('ALTER TABLE processed_emails ADD COLUMN email TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN content TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN content_fetched BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        # Remove unused column
+        try:
+            cursor.execute('ALTER TABLE connections DROP COLUMN history_id')
         except sqlite3.OperationalError:
             pass
         

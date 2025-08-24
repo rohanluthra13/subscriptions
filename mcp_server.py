@@ -375,6 +375,99 @@ def trigger_email_fetch(quick_sync: bool = True) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
+def fetch_email_content(
+    email_ids: Optional[list] = None,
+    sender_domains: Optional[list] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: Optional[int] = 50
+) -> str:
+    """Fetch full content for specific emails to enable subscription analysis
+    
+    Args:
+        email_ids: List of specific Gmail message IDs to fetch content for (optional)
+        sender_domains: List of sender domains to fetch content for (e.g., ["netflix.com", "spotify.com"]) (optional)
+        date_from: Start date for filtering in YYYY-MM-DD format (optional)
+        date_to: End date for filtering in YYYY-MM-DD format (optional)  
+        limit: Maximum number of emails to fetch content for (default: 50, max: 200)
+        
+    Only fetches content for emails where content hasn't been fetched yet.
+    Use this to get full email body text for subscription analysis.
+    
+    Requires main.py to be running on localhost:8000
+    """
+    try:
+        # Check if app is running
+        app_url = "http://localhost:8000"
+        
+        try:
+            status_response = requests.get(f"{app_url}/status", timeout=5)
+            if status_response.status_code != 200:
+                return json.dumps({
+                    "success": False,
+                    "error": f"App status check failed: HTTP {status_response.status_code}",
+                    "hint": "Check if main.py is running correctly"
+                })
+        except requests.exceptions.RequestException as e:
+            return json.dumps({
+                "success": False,
+                "error": f"Cannot connect to app: {type(e).__name__}: {str(e)}",
+                "hint": "Run: python main.py and ensure it's accessible at localhost:8000"
+            })
+        
+        # Build request payload
+        request_data = {}
+        if email_ids:
+            request_data["email_ids"] = email_ids
+        if sender_domains:
+            request_data["sender_domains"] = sender_domains
+        if date_from:
+            request_data["date_from"] = date_from
+        if date_to:
+            request_data["date_to"] = date_to
+        if limit:
+            request_data["limit"] = min(limit, 200)  # Cap at 200 for safety
+        
+        # Call the content fetch endpoint
+        content_endpoint = f"{app_url}/api/fetch_email_content"
+        
+        response = requests.post(
+            content_endpoint, 
+            json=request_data,
+            headers={'Content-Type': 'application/json'},
+            timeout=60  # Longer timeout since content fetching takes time
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("success"):
+                return json.dumps({
+                    "success": True,
+                    "message": result.get("message", "Content fetch completed"),
+                    "data": result.get("data", {}),
+                    "filters_used": {
+                        "email_ids": email_ids or "none",
+                        "sender_domains": sender_domains or "none", 
+                        "date_range": f"{date_from} to {date_to}" if date_from or date_to else "none",
+                        "limit": limit
+                    }
+                }, indent=2)
+            else:
+                return json.dumps({
+                    "success": False,
+                    "error": result.get("error", "Unknown error from app")
+                })
+        else:
+            return json.dumps({
+                "success": False,
+                "error": f"HTTP {response.status_code}: {response.text}"
+            })
+            
+    except Exception as e:
+        print(f"Error in fetch_email_content: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
 def get_email_status() -> str:
     """Get email system status and statistics
     

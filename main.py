@@ -617,6 +617,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_metadata_fetch()
         elif path == '/api/fetch':
             self.handle_api_fetch()
+        elif path == '/api/fetch_email_content':
+            self.handle_api_fetch_content()
         else:
             self.send_error(404)
 
@@ -997,6 +999,195 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             }
         }
 
+    def api_fetch_email_content(self, request_data):
+        """Selectively fetch email content for specific messages"""
+        # Get active connection
+        connections = self.sm.get_connections()
+        if not connections:
+            return {
+                "success": False,
+                "error": "No Gmail connection found",
+                "data": None
+            }
+        
+        email = connections[0]['email']
+        
+        # Parse request parameters
+        email_ids = request_data.get('email_ids', [])
+        sender_domains = request_data.get('sender_domains', [])
+        date_from = request_data.get('date_from')  # YYYY-MM-DD format
+        date_to = request_data.get('date_to')      # YYYY-MM-DD format
+        limit = request_data.get('limit', 50)      # Default limit
+        
+        # Validate limit
+        if limit > 200:
+            limit = 200  # Cap at 200 for safety
+        
+        try:
+            # Find emails to fetch content for
+            conn = sqlite3.connect(self.sm.db_path)
+            cursor = conn.cursor()
+            
+            # Build query to find emails that need content fetching
+            query_parts = ["content_fetched = 0 OR content_fetched IS NULL"]
+            params = []
+            
+            if email_ids:
+                placeholders = ','.join('?' * len(email_ids))
+                query_parts.append(f"gmail_message_id IN ({placeholders})")
+                params.extend(email_ids)
+            
+            if sender_domains:
+                domain_conditions = []
+                for domain in sender_domains:
+                    domain_conditions.append("sender_domain = ?")
+                    params.append(domain.lower())
+                query_parts.append(f"({' OR '.join(domain_conditions)})")
+            
+            if date_from:
+                query_parts.append("DATE(received_at) >= ?")
+                params.append(date_from)
+            
+            if date_to:
+                query_parts.append("DATE(received_at) <= ?")
+                params.append(date_to)
+            
+            # Execute query
+            query = f"""
+                SELECT gmail_message_id, subject, sender, sender_domain, received_at 
+                FROM processed_emails 
+                WHERE {' AND '.join(query_parts)}
+                ORDER BY received_at DESC 
+                LIMIT ?
+            """
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            emails_to_fetch = cursor.fetchall()
+            
+            if not emails_to_fetch:
+                conn.close()
+                return {
+                    "success": True,
+                    "message": "No emails found matching criteria or all already have content",
+                    "data": {
+                        "fetched": 0,
+                        "updated": 0,
+                        "errors": 0
+                    }
+                }
+            
+            # Fetch content for each email
+            access_token = self.sm.get_valid_access_token(email)
+            headers = {'Authorization': f'Bearer {access_token}'}
+            
+            fetched_count = 0
+            updated_count = 0
+            error_count = 0
+            
+            for email_data in emails_to_fetch:
+                gmail_message_id, subject, sender, sender_domain, received_at = email_data
+                
+                try:
+                    # Fetch full email content
+                    url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{gmail_message_id}?format=full'
+                    response = requests.get(url, headers=headers)
+                    
+                    if response.status_code == 200:
+                        msg_data = response.json()
+                        
+                        # Extract content from payload
+                        content = self.extract_email_content(msg_data.get('payload', {}))
+                        
+                        # Update database with content
+                        cursor.execute('''
+                            UPDATE processed_emails 
+                            SET content = ?, content_fetched = 1
+                            WHERE gmail_message_id = ?
+                        ''', (content, gmail_message_id))
+                        
+                        fetched_count += 1
+                        updated_count += 1
+                        
+                    else:
+                        print(f"Failed to fetch content for {gmail_message_id}: {response.status_code}")
+                        error_count += 1
+                    
+                    # Small delay to be nice to the API
+                    time.sleep(0.1)
+                    
+                except Exception as e:
+                    print(f"Error fetching content for {gmail_message_id}: {e}")
+                    error_count += 1
+            
+            conn.commit()
+            conn.close()
+            
+            return {
+                "success": True,
+                "message": f"Fetched content for {fetched_count} emails",
+                "data": {
+                    "fetched": fetched_count,
+                    "updated": updated_count,
+                    "errors": error_count,
+                    "total_candidates": len(emails_to_fetch)
+                }
+            }
+            
+        except Exception as e:
+            if 'conn' in locals():
+                conn.close()
+            return {
+                "success": False,
+                "error": f"Failed to fetch email content: {str(e)}",
+                "data": None
+            }
+
+    def extract_email_content(self, payload):
+        """Extract readable text content from Gmail API payload"""
+        content_parts = []
+        
+        def extract_parts(part):
+            """Recursively extract content from message parts"""
+            mime_type = part.get('mimeType', '')
+            
+            # Handle text parts
+            if mime_type in ['text/plain', 'text/html']:
+                body = part.get('body', {}).get('data')
+                if body:
+                    import base64
+                    try:
+                        # Decode base64url encoded content
+                        decoded = base64.urlsafe_b64decode(body + '==')  # Add padding if needed
+                        text = decoded.decode('utf-8', errors='replace')
+                        
+                        # For HTML, we could strip tags, but keep it simple for now
+                        if mime_type == 'text/html':
+                            # Basic HTML tag removal (simple approach)
+                            import re
+                            text = re.sub(r'<[^>]+>', '', text)
+                            text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+                        
+                        content_parts.append(text.strip())
+                    except Exception as e:
+                        print(f"Failed to decode email part: {e}")
+            
+            # Handle multipart - recursively process parts
+            elif 'parts' in part:
+                for subpart in part['parts']:
+                    extract_parts(subpart)
+        
+        extract_parts(payload)
+        
+        # Join all text parts
+        full_content = '\n\n'.join(content_parts)
+        
+        # Limit content size (e.g., to 50KB) to avoid huge database entries
+        if len(full_content) > 50000:
+            full_content = full_content[:50000] + "\n\n[Content truncated at 50KB]"
+        
+        return full_content if full_content.strip() else "[No readable content found]"
+
     def handle_metadata_fetch(self):
         """Handle metadata fetch request (web interface)"""
         result = self.api_fetch_emails()
@@ -1017,6 +1208,30 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     def handle_api_fetch(self):
         """Handle API fetch request (returns JSON)"""
         result = self.api_fetch_emails()
+        
+        response_json = json.dumps(result, indent=2)
+        
+        self.send_response(200 if result["success"] else 400)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Content-length', str(len(response_json)))
+        self.end_headers()
+        self.wfile.write(response_json.encode())
+
+    def handle_api_fetch_content(self):
+        """Handle API fetch email content request (returns JSON)"""
+        # Get request body
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length > 0:
+            request_body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                request_data = json.loads(request_body)
+            except json.JSONDecodeError:
+                self.send_error(400, "Invalid JSON in request body")
+                return
+        else:
+            request_data = {}
+        
+        result = self.api_fetch_email_content(request_data)
         
         response_json = json.dumps(result, indent=2)
         

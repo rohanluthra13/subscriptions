@@ -104,17 +104,19 @@ class SubscriptionManager:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS subscriptions (
                 id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-                email TEXT NOT NULL,
-                name TEXT NOT NULL,
-                domain TEXT NOT NULL,
-                status TEXT DEFAULT 'active',
-                renewing BOOLEAN DEFAULT 1,
+                name TEXT NOT NULL UNIQUE,
+                domains TEXT,  -- JSON array
+                category TEXT,
                 cost DECIMAL(10,2),
+                currency TEXT DEFAULT 'USD',
                 billing_cycle TEXT,
-                next_date DATE,
+                status TEXT DEFAULT 'active',
+                auto_renewing BOOLEAN DEFAULT 1,
+                next_billing_date DATE,
+                notes TEXT,
+                created_by TEXT DEFAULT 'user',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(email, domain)
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -815,10 +817,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             rows += f"""<tr>
                 <td>{sub['name']}</td>
                 <td>{sub['status']}</td>
-                <td>{'Yes' if sub.get('renewing') else 'No'}</td>
+                <td>{'Yes' if sub.get('auto_renewing') else 'No'}</td>
                 <td>{sub.get('cost', '') or ''}</td>
                 <td>{sub.get('billing_cycle', '') or ''}</td>
-                <td>{sub.get('next_date', '') or ''}</td>
+                <td>{sub.get('next_billing_date', '') or ''}</td>
             </tr>"""
         
         return f"""<div style="height: 80vh; overflow-y: auto;">
@@ -895,18 +897,21 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         connections = self.sm.get_connections()
         email_count = self.sm.get_email_count()
         
-        # Check if app is accessible (always true since we're running)
-        status_data = {
-            "status": "running",
-            "gmail_connected": len(connections) > 0,
-            "gmail_account": connections[0]["email"] if connections else None,
-            "last_sync": connections[0]["last_sync_at"] if connections else None,
-            "connection_active": bool(connections[0]["is_active"]) if connections else False,
-            "total_emails": email_count,
-            "app_url": f"http://localhost:{self.sm.port}"
+        # Standardized API response format
+        response_data = {
+            "success": True,
+            "data": {
+                "status": "running",
+                "gmail_connected": len(connections) > 0,
+                "gmail_account": connections[0]["email"] if connections else None,
+                "last_sync": connections[0]["last_sync_at"] if connections else None,
+                "connection_active": bool(connections[0]["is_active"]) if connections else False,
+                "total_emails": email_count,
+                "app_url": f"http://localhost:{self.sm.port}"
+            }
         }
         
-        response_json = json.dumps(status_data, indent=2)
+        response_json = json.dumps(response_data, indent=2)
         
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
@@ -921,7 +926,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         if not connections:
             return {
                 "success": False,
-                "error": "No Gmail connection found"
+                "error": "No Gmail connection found",
+                "data": None
             }
         
         email = connections[0]['email']
@@ -947,9 +953,12 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         return {
             "success": True,
-            "job_id": job_id,
             "message": "Email fetch started in background",
-            "note": "This may take 10-30 minutes depending on email volume"
+            "data": {
+                "job_id": job_id,
+                "status": "started",
+                "note": "This may take 10-30 minutes depending on email volume"
+            }
         }
 
     def handle_metadata_fetch(self):
@@ -960,13 +969,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.send_error(400, result.get("error", "Unknown error"))
             return
         
-        # Format results for display
-        data = result["data"]
-        fetch_results = f"fetched: {data.get('stored', 0)} new"
-        if data.get('duplicates', 0) > 0:
-            fetch_results += f", {data.get('duplicates', 0)} duplicates"
-        if data.get('errors', 0) > 0:
-            fetch_results += f", {data.get('errors', 0)} errors"
+        # Format results for display - now shows job started message
+        job_id = result.get('data', {}).get('job_id', 'unknown')
+        fetch_results = f"started: {job_id} (running in background)"
         
         # Redirect back to dashboard with results in URL
         self.send_response(302)

@@ -130,6 +130,13 @@ class SubscriptionManager:
             )
         ''')
         
+        # Create indexes for better query performance
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_gmail_message_id ON processed_emails(gmail_message_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_sender_domain ON processed_emails(sender_domain)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_email ON processed_emails(email)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_received_at ON processed_emails(received_at DESC)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_content_fetched ON processed_emails(content_fetched)')
+        
         # Simple migration: add missing columns if they don't exist
         try:
             cursor.execute('ALTER TABLE processed_emails ADD COLUMN sender_domain TEXT')

@@ -81,6 +81,13 @@ Note: Tables are independent - no formal foreign key relationships implemented
 | content           | TEXT      | -                                 | Full email body content (HTML/text)  |
 | content_fetched   | BOOLEAN   | DEFAULT 0                         | Whether content has been fetched     |
 
+**Indexes:**
+- `idx_gmail_message_id` on `gmail_message_id` - Fast duplicate checking
+- `idx_sender_domain` on `sender_domain` - Domain filtering and grouping
+- `idx_email` on `email` - Filter by account
+- `idx_received_at` on `received_at DESC` - Time-based sorting
+- `idx_content_fetched` on `content_fetched` - Find emails needing content
+
 ### subscriptions
 
 | Column            | Type         | Constraints                        | Description                                      |

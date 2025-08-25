@@ -543,33 +543,72 @@ class SubscriptionManager:
         conn.close()
         return count
 
-    def get_processed_emails(self, limit: int = None, offset: int = 0):
-        """Get processed emails with optional pagination"""
+    def get_processed_emails(self, limit: int = None, offset: int = 0, filters: dict = None):
+        """Get processed emails with optional pagination and filters"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get total count
-        cursor.execute('SELECT COUNT(*) FROM processed_emails')
+        # Build WHERE clause based on filters
+        where_parts = []
+        params = []
+        
+        if filters:
+            if filters.get('domain'):
+                where_parts.append('sender_domain = ?')
+                params.append(filters['domain'])
+            
+            if filters.get('has_content') is not None:
+                if filters['has_content']:
+                    where_parts.append('(content IS NOT NULL AND content != "")')
+                else:
+                    where_parts.append('(content IS NULL OR content = "")')
+            
+            if filters.get('email_account'):
+                where_parts.append('email = ?')
+                params.append(filters['email_account'])
+        
+        where_clause = ' WHERE ' + ' AND '.join(where_parts) if where_parts else ''
+        
+        # Get total count with filters
+        count_query = f'SELECT COUNT(*) FROM processed_emails{where_clause}'
+        cursor.execute(count_query, params)
         total = cursor.fetchone()[0]
         
         # Get emails with optional pagination
         if limit:
-            cursor.execute('''
-                SELECT * FROM processed_emails 
+            query = f'''
+                SELECT * FROM processed_emails{where_clause}
                 ORDER BY received_at DESC 
                 LIMIT ? OFFSET ?
-            ''', (limit, offset))
+            '''
+            cursor.execute(query, params + [limit, offset])
         else:
-            cursor.execute('''
-                SELECT * FROM processed_emails 
+            query = f'''
+                SELECT * FROM processed_emails{where_clause}
                 ORDER BY received_at DESC
-            ''')
+            '''
+            cursor.execute(query, params)
         
         columns = [desc[0] for desc in cursor.description]
         emails = [dict(zip(columns, row)) for row in cursor.fetchall()]
         conn.close()
         
         return {"emails": emails, "total": total}
+
+    def get_unique_domains(self):
+        """Get list of unique sender domains with email counts"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT sender_domain, COUNT(*) as count 
+            FROM processed_emails 
+            WHERE sender_domain IS NOT NULL AND sender_domain != ''
+            GROUP BY sender_domain 
+            ORDER BY count DESC
+        ''')
+        domains = [{'domain': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return domains
 
     def reset_database(self):
         """Clear all data and force fresh authentication"""
@@ -809,40 +848,125 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         return self.render_subscriptions_table(subscriptions)
     
     def render_emails_view(self):
-        """Render emails table with back button"""
-        data = self.sm.get_processed_emails()
+        """Render emails table with filters and enhanced fields"""
+        # Get filter parameters from URL
+        url = urlparse(self.path)
+        params = parse_qs(url.query)
+        
+        # Parse filters
+        filters = {}
+        if params.get('domain'):
+            filters['domain'] = params['domain'][0]
+        if params.get('has_content'):
+            filters['has_content'] = params['has_content'][0] == 'true'
+        
+        # Get filtered emails
+        data = self.sm.get_processed_emails(filters=filters)
         emails = data['emails']
         total = data['total']
         
+        # Get unique domains for filter dropdown
+        domains = self.sm.get_unique_domains()
+        
+        # Build domain filter options
+        domain_options = '<option value="">All domains</option>'
+        for domain_info in domains[:50]:  # Limit to top 50 domains
+            selected = 'selected' if filters.get('domain') == domain_info['domain'] else ''
+            domain_options += f'<option value="{domain_info["domain"]}" {selected}>{domain_info["domain"]} ({domain_info["count"]})</option>'
+        
+        # Build email rows with more fields
         email_rows = ""
-        for email in emails:
+        for email in emails[:500]:  # Limit display to 500 rows for performance
+            # Check if email has content
+            has_content = bool(email.get('content') and email['content'].strip())
+            content_indicator = '✓' if has_content else '–'
+            content_style = 'color: #008000;' if has_content else 'color: #ccc;'
+            
+            # Truncate subject for display
+            subject = email.get('subject', '')
+            if len(subject) > 60:
+                subject = subject[:57] + '...'
+            
+            # Format sender
+            sender = email.get('sender', '')
+            if len(sender) > 40:
+                sender = sender[:37] + '...'
+            
             email_rows += f"""
             <tr>
-                <td>{email['sender']}</td>
-                <td>{email['subject']}</td>
-                <td>{self.format_datetime_nz(email['received_at']) if email['received_at'] else 'N/A'}</td>
+                <td style="font-size: 11px;">{email.get('sender_domain', '')}</td>
+                <td style="font-size: 11px;">{sender}</td>
+                <td style="font-size: 11px;">{subject}</td>
+                <td style="text-align: center; {content_style}">{content_indicator}</td>
+                <td style="font-size: 11px;">{self.format_datetime_nz(email['received_at']) if email['received_at'] else 'N/A'}</td>
             </tr>
             """
         
+        # Current filter status
+        filter_status = []
+        if filters.get('domain'):
+            filter_status.append(f"domain: {filters['domain']}")
+        if filters.get('has_content') is not None:
+            filter_status.append(f"content: {'yes' if filters['has_content'] else 'no'}")
+        filter_text = f" (filtered by {', '.join(filter_status)})" if filter_status else ""
+        
         return f"""
-            <div style="margin-bottom: 30px;">
+            <div style="margin-bottom: 20px;">
                 <a href="/" style="text-decoration: none;">
                     <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">back</button>
                 </a>
+                <span style="margin-left: 20px; color: #666; font-size: 14px;">
+                    {total} emails{filter_text}
+                </span>
             </div>
-            <div style="height: 80vh; overflow-y: auto;">
-                <table>
-                <thead>
+            
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #e0e0e0;">
+                <form method="get" action="/" style="display: flex; gap: 15px; align-items: center;">
+                    <input type="hidden" name="view" value="emails">
+                    
+                    <div>
+                        <label style="font-size: 12px; color: #666; margin-right: 5px;">Domain:</label>
+                        <select name="domain" style="padding: 5px; font-size: 12px; font-family: 'SF Mono', monospace;">
+                            {domain_options}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label style="font-size: 12px; color: #666; margin-right: 5px;">Has Content:</label>
+                        <select name="has_content" style="padding: 5px; font-size: 12px; font-family: 'SF Mono', monospace;">
+                            <option value="">All</option>
+                            <option value="true" {'selected' if filters.get('has_content') is True else ''}>With Content</option>
+                            <option value="false" {'selected' if filters.get('has_content') is False else ''}>Metadata Only</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" style="padding: 5px 15px; font-size: 12px;">Apply Filters</button>
+                    
+                    <a href="/?view=emails" style="text-decoration: none;">
+                        <button type="button" style="padding: 5px 15px; font-size: 12px; background: #fff;">Clear</button>
+                    </a>
+                </form>
+            </div>
+            
+            <div style="height: 65vh; overflow-y: auto;">
+                <table style="font-size: 12px;">
+                <thead style="position: sticky; top: 0; background: white;">
                     <tr>
-                        <th>Sender</th>
-                        <th>Subject</th>
-                        <th>Received</th>
+                        <th style="width: 15%;">Domain</th>
+                        <th style="width: 25%;">Sender</th>
+                        <th style="width: 35%;">Subject</th>
+                        <th style="width: 10%; text-align: center;">Content</th>
+                        <th style="width: 15%;">Received</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {email_rows}
+                    {email_rows if email_rows else '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">No emails found matching filters</td></tr>'}
                 </tbody>
                 </table>
+            </div>
+            
+            <div style="margin-top: 10px; font-size: 11px; color: #666;">
+                Showing {min(500, len(emails))} of {total} emails. Content indicator: ✓ = has content, – = metadata only
             </div>
         """
     

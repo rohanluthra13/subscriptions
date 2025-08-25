@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subscription Manager</title>
+    <style>
+        body { margin: 0; font-family: "SF Mono", monospace; background: white; }
+        
+        /* Main layout: 1/3 left, 2/3 right */
+        .container { display: grid; grid-template-columns: 1fr 2fr; height: 100vh; }
+        
+        /* Left panel with 4 sections */
+        .left-panel { border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+        
+        /* Each section has fixed height */
+        .section { 
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .section:nth-child(1) { 
+            height: 10vh; 
+            display: flex;
+            align-items: end;
+            padding-bottom: 20px;
+        }
+        .section:nth-child(2), 
+        .section:nth-child(3), 
+        .section:nth-child(4) { 
+            display: grid; 
+            grid-template-columns: 1fr 2fr;
+            align-items: end;
+            padding-bottom: 20px;
+        }
+        .section:nth-child(2) { height: 25vh; }
+        .section:nth-child(3) { height: 25vh; }
+        .section:nth-child(4) { height: 25vh; }
+        
+        /* Left side of each section (title) */
+        .section-title { 
+            padding-left: 30px;
+            font-size: 24px; 
+            font-weight: 700; 
+            color: #000;
+        }
+        
+        /* Right side of each section (content/actions) */
+        .section-content { 
+            padding-right: 30px;
+            text-align: right;
+        }
+        
+        /* Right panel for subscriptions */
+        .right-panel { padding: 30px; }
+        .right-panel h2 { margin: 0 0 30px 0; font-size: 28px; font-weight: 700; }
+        
+        /* Table styling */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 16px; text-align: left; border-bottom: 1px solid #e0e0e0; word-wrap: break-word; }
+        th { font-weight: 600; font-size: 14px; color: #666; }
+        td { font-size: 12px; }
+        
+        /* Button styling */
+        button { 
+            padding: 10px 20px; 
+            margin-left: 10px;
+            border: 1px solid #ddd; 
+            background: white; 
+            cursor: pointer; 
+            font-size: 14px;
+        }
+        button:hover { background: #f8f9fa; }
+        .primary { background: #007bff; color: white; border-color: #007bff; }
+        .primary:hover { background: #0056b3; }
+        
+        /* Status text */
+        .status { color: #666; font-size: 14px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left-panel">
+            <div class="section">
+                <div class="section-title">subscriptions</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">connect email</div>
+                <div class="section-content" style="{{connection_style}}">
+                    {{connection_content}}
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">check emails</div>
+                <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                    <div style="text-align: right; padding-top: 10px;">
+                        <form action="/fetch" method="post" style="display: inline;">
+                            <button type="submit" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">fetch emails</button>
+                        </form>
+                    </div>
+                    {{fetch_status_content}}
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">view data</div>
+                <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                    <div style="text-align: right; padding-top: 10px;">
+                        <a href="/?view=emails" style="text-decoration: none;">
+                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">view emails</button>
+                        </a>
+                        <span style="margin: 0 10px;"></span>
+                        <a href="/reset" style="text-decoration: none;">
+                            <button onclick="return confirm('Delete all data?')" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">reset</button>
+                        </a>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails stored:</div>
+                        <div style="color: #008000; font-size: 14px;">{{email_count}}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            {{right_panel_content}}
+        </div>
+    </div>
+</body>
+</html>

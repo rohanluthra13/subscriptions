@@ -648,6 +648,18 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_header('Content-length', str(len(response_json)))
         self.end_headers()
         self.wfile.write(response_json.encode())
+    
+    def render_template(self, template_name, **kwargs):
+        """Simple template rendering using string replacement"""
+        template_path = f"templates/{template_name}"
+        with open(template_path, 'r') as f:
+            template = f.read()
+        
+        # Replace {{variable}} with actual values
+        for key, value in kwargs.items():
+            template = template.replace('{{' + key + '}}', str(value))
+        
+        return template
 
     def do_GET(self):
         """Handle GET requests"""
@@ -696,158 +708,50 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         params = parse_qs(url.query)
         fetch_results = params.get('fetch_results', [None])[0]
         
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Subscription Manager</title>
-    <style>
-        body {{ margin: 0; font-family: "SF Mono", monospace; background: white; }}
-        
-        /* Main layout: 1/3 left, 2/3 right */
-        .container {{ display: grid; grid-template-columns: 1fr 2fr; height: 100vh; }}
-        
-        /* Left panel with 4 sections */
-        .left-panel {{ border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }}
-        
-        /* Each section has fixed height */
-        .section {{ 
-            border-bottom: 1px solid #e0e0e0;
-        }}
-        .section:nth-child(1) {{ 
-            height: 10vh; 
-            display: flex;
-            align-items: end;
-            padding-bottom: 20px;
-        }}
-        .section:nth-child(2), 
-        .section:nth-child(3), 
-        .section:nth-child(4) {{ 
-            display: grid; 
-            grid-template-columns: 1fr 2fr;
-            align-items: end;
-            padding-bottom: 20px;
-        }}
-        .section:nth-child(2) {{ height: 25vh; }}
-        .section:nth-child(3) {{ height: 25vh; }}
-        .section:nth-child(4) {{ height: 25vh; }}
-        
-        /* Left side of each section (title) */
-        .section-title {{ 
-            padding-left: 30px;
-            font-size: 24px; 
-            font-weight: 700; 
-            color: #000;
-        }}
-        
-        /* Right side of each section (content/actions) */
-        .section-content {{ 
-            padding-right: 30px;
-            text-align: right;
-        }}
-        
-        /* Right panel for subscriptions */
-        .right-panel {{ padding: 30px; }}
-        .right-panel h2 {{ margin: 0 0 30px 0; font-size: 28px; font-weight: 700; }}
-        
-        /* Table styling */
-        table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ padding: 16px; text-align: left; border-bottom: 1px solid #e0e0e0; word-wrap: break-word; }}
-        th {{ font-weight: 600; font-size: 14px; color: #666; }}
-        td {{ font-size: 12px; }}
-        
-        /* Button styling */
-        button {{ 
-            padding: 10px 20px; 
-            margin-left: 10px;
-            border: 1px solid #ddd; 
-            background: white; 
-            cursor: pointer; 
-            font-size: 14px;
-        }}
-        button:hover {{ background: #f8f9fa; }}
-        .primary {{ background: #007bff; color: white; border-color: #007bff; }}
-        .primary:hover {{ background: #0056b3; }}
-        
-        /* Status text */
-        .status {{ color: #666; font-size: 14px; margin-bottom: 10px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="left-panel">
-            <div class="section">
-                <div class="section-title">subscriptions</div>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">connect email</div>
-                <div class="section-content" style="{'display: flex; flex-direction: column; justify-content: space-between; height: 100%;' if connected else ''}">
-                    {f'''
-                    <div style="text-align: right; padding-top: 10px;">
-                        <a href="/auth/gmail" style="text-decoration: none;">
-                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">change email</button>
-                        </a>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails connected:</div>
-                        <div class="status" style="color: #008000;">{connections[0]["email"]}</div>
-                    </div>
-                    ''' if connected else '''
-                    <div style="text-align: right; padding-top: 10px;">
-                        <a href="/auth/gmail" style="text-decoration: none;">
-                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">connect gmail</button>
-                        </a>
-                    </div>
-                    '''}
+        # Prepare connection content
+        if connected:
+            connection_style = "display: flex; flex-direction: column; justify-content: space-between; height: 100%;"
+            connection_content = f'''
+                <div style="text-align: right; padding-top: 10px;">
+                    <a href="/auth/gmail" style="text-decoration: none;">
+                        <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">change email</button>
+                    </a>
                 </div>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">check emails</div>
-                <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
-                    <div style="text-align: right; padding-top: 10px;">
-                        <form action="/fetch" method="post" style="display: inline;">
-                            <button type="submit" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">fetch emails</button>
-                        </form>
-                    </div>
-                    {f'''
-                    <div style="text-align: right;">
-                        {f'<div style="color: #008000; font-size: 14px; margin-bottom: 15px;">{fetch_results}</div>' if fetch_results else ''}
-                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">last fetched:</div>
-                        <div style="color: #008000; font-size: 14px;">{connections[0]["last_sync_at"][:16] if connections[0]["last_sync_at"] else "never"}</div>
-                    </div>
-                    ''' if connected else ''}
+                <div style="text-align: right;">
+                    <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails connected:</div>
+                    <div class="status" style="color: #008000;">{connections[0]["email"]}</div>
                 </div>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">view data</div>
-                <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
-                    <div style="text-align: right; padding-top: 10px;">
-                        <a href="/?view=emails" style="text-decoration: none;">
-                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">view emails</button>
-                        </a>
-                        <span style="margin: 0 10px;"></span>
-                        <a href="/reset" style="text-decoration: none;">
-                            <button onclick="return confirm('Delete all data?')" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">reset</button>
-                        </a>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails stored:</div>
-                        <div style="color: #008000; font-size: 14px;">{email_count}</div>
-                    </div>
+                '''
+        else:
+            connection_style = ""
+            connection_content = '''
+                <div style="text-align: right; padding-top: 10px;">
+                    <a href="/auth/gmail" style="text-decoration: none;">
+                        <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">connect gmail</button>
+                    </a>
                 </div>
-            </div>
-        </div>
+                '''
         
-        <div class="right-panel">
-            {self.render_right_panel(params)}
-        </div>
-    </div>
-</body>
-</html>
-        """
+        # Prepare fetch status content
+        if connected:
+            fetch_status_content = f'''
+                <div style="text-align: right;">
+                    {f'<div style="color: #008000; font-size: 14px; margin-bottom: 15px;">{fetch_results}</div>' if fetch_results else ''}
+                    <div style="color: #666; font-size: 14px; margin-bottom: 30px;">last fetched:</div>
+                    <div style="color: #008000; font-size: 14px;">{connections[0]["last_sync_at"][:16] if connections[0]["last_sync_at"] else "never"}</div>
+                </div>
+                '''
+        else:
+            fetch_status_content = ""
+        
+        # Render template
+        html = self.render_template('dashboard.html',
+            connection_style=connection_style,
+            connection_content=connection_content,
+            fetch_status_content=fetch_status_content,
+            email_count=email_count,
+            right_panel_content=self.render_right_panel(params)
+        )
         
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
@@ -923,6 +827,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             </tr>
             """
         
+        # Set default email rows if empty
+        if not email_rows:
+            email_rows = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">No emails found matching filters</td></tr>'
+        
         # Current filter status
         filter_status = []
         if filters.get('domain'):
@@ -931,73 +839,28 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             filter_status.append(f"content: {'yes' if filters['has_content'] else 'no'}")
         filter_text = f" (filtered by {', '.join(filter_status)})" if filter_status else ""
         
-        return f"""
-            <div style="margin-bottom: 20px;">
-                <a href="/" style="text-decoration: none;">
-                    <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">back</button>
-                </a>
-                <span style="margin-left: 20px; color: #666; font-size: 14px;">
-                    {total} emails{filter_text}
-                </span>
-            </div>
-            
-            <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #e0e0e0;">
-                <form method="get" action="/" style="display: flex; gap: 15px; align-items: center;">
-                    <input type="hidden" name="view" value="emails">
-                    
-                    <div>
-                        <label style="font-size: 12px; color: #666; margin-right: 5px;">Domain:</label>
-                        <select name="domain" style="padding: 5px; font-size: 12px; font-family: 'SF Mono', monospace;">
-                            {domain_options}
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label style="font-size: 12px; color: #666; margin-right: 5px;">Has Content:</label>
-                        <select name="has_content" style="padding: 5px; font-size: 12px; font-family: 'SF Mono', monospace;">
-                            <option value="">All</option>
-                            <option value="true" {'selected' if filters.get('has_content') is True else ''}>With Content</option>
-                            <option value="false" {'selected' if filters.get('has_content') is False else ''}>Metadata Only</option>
-                        </select>
-                    </div>
-                    
-                    <button type="submit" style="padding: 5px 15px; font-size: 12px;">Apply Filters</button>
-                    
-                    <a href="/?view=emails" style="text-decoration: none;">
-                        <button type="button" style="padding: 5px 15px; font-size: 12px; background: #fff;">Clear</button>
-                    </a>
-                </form>
-            </div>
-            
-            <div style="height: 65vh; overflow-y: auto;">
-                <table style="font-size: 12px;">
-                <thead style="position: sticky; top: 0; background: white;">
-                    <tr>
-                        <th style="width: 15%;">Domain</th>
-                        <th style="width: 25%;">Sender</th>
-                        <th style="width: 35%;">Subject</th>
-                        <th style="width: 10%; text-align: center;">Content</th>
-                        <th style="width: 15%;">Received</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {email_rows if email_rows else '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">No emails found matching filters</td></tr>'}
-                </tbody>
-                </table>
-            </div>
-            
-            <div style="margin-top: 10px; font-size: 11px; color: #666;">
-                Showing {min(500, len(emails))} of {total} emails. Content indicator: ✓ = has content, – = metadata only
-            </div>
-        """
+        # Prepare template variables
+        has_content_true_selected = 'selected' if filters.get('has_content') is True else ''
+        has_content_false_selected = 'selected' if filters.get('has_content') is False else ''
+        display_count = min(500, len(emails))
+        
+        return self.render_template('emails_view.html',
+            total=total,
+            filter_text=filter_text,
+            domain_options=domain_options,
+            has_content_true_selected=has_content_true_selected,
+            has_content_false_selected=has_content_false_selected,
+            email_rows=email_rows,
+            display_count=display_count
+        )
     
     def render_subscriptions_table(self, subscriptions):
         if not subscriptions:
-            return '<div style="height: 80vh; overflow-y: auto;"><p style="padding: 20px; color: #666;">No subscriptions yet. Add items to the scratchpad and process them to see subscriptions here.</p></div>'
+            return self.render_template('empty_subscriptions.html')
         
-        rows = ""
+        subscription_rows = ""
         for sub in subscriptions:
-            rows += f"""<tr>
+            subscription_rows += f"""<tr>
                 <td>{sub['name']}</td>
                 <td>{sub['status']}</td>
                 <td>{'Yes' if sub.get('auto_renewing') else 'No'}</td>
@@ -1006,21 +869,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 <td>{sub.get('next_billing_date', '') or ''}</td>
             </tr>"""
         
-        return f"""<div style="height: 80vh; overflow-y: auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Status</th>
-                        <th>Renewing</th>
-                        <th>Cost</th>
-                        <th>Billing Cycle</th>
-                        <th>Next Date</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>"""
+        return self.render_template('subscriptions_table.html',
+            subscription_rows=subscription_rows
+        )
 
 
     def start_gmail_auth(self):

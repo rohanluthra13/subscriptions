@@ -1,0 +1,57 @@
+<div style="margin-bottom: 20px;">
+    <a href="/" style="text-decoration: none;">
+        <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">back</button>
+    </a>
+    <span style="margin-left: 20px; color: #666; font-size: 14px;">
+        {{total}} emails{{filter_text}}
+    </span>
+</div>
+
+<div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #e0e0e0;">
+    <form method="get" action="/" style="display: flex; gap: 15px; align-items: center;">
+        <input type="hidden" name="view" value="emails">
+        
+        <div>
+            <label style="font-size: 12px; color: #666; margin-right: 5px;">Domain:</label>
+            <select name="domain" style="padding: 5px; font-size: 12px; font-family: 'SF Mono', monospace;">
+                {{domain_options}}
+            </select>
+        </div>
+        
+        <div>
+            <label style="font-size: 12px; color: #666; margin-right: 5px;">Has Content:</label>
+            <select name="has_content" style="padding: 5px; font-size: 12px; font-family: 'SF Mono', monospace;">
+                <option value="">All</option>
+                <option value="true" {{has_content_true_selected}}>With Content</option>
+                <option value="false" {{has_content_false_selected}}>Metadata Only</option>
+            </select>
+        </div>
+        
+        <button type="submit" style="padding: 5px 15px; font-size: 12px;">Apply Filters</button>
+        
+        <a href="/?view=emails" style="text-decoration: none;">
+            <button type="button" style="padding: 5px 15px; font-size: 12px; background: #fff;">Clear</button>
+        </a>
+    </form>
+</div>
+
+<div style="height: 65vh; overflow-y: auto;">
+    <table style="font-size: 12px;">
+    <thead style="position: sticky; top: 0; background: white;">
+        <tr>
+            <th style="width: 15%;">Domain</th>
+            <th style="width: 25%;">Sender</th>
+            <th style="width: 35%;">Subject</th>
+            <th style="width: 10%; text-align: center;">Content</th>
+            <th style="width: 15%;">Received</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{email_rows}}
+    </tbody>
+    </table>
+</div>
+
+<div style="margin-top: 10px; font-size: 11px; color: #666;">
+    Showing {{display_count}} of {{total}} emails. Content indicator: ✓ = has content, – = metadata only
+</div>

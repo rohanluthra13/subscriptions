@@ -535,5 +535,123 @@ def get_email_status() -> str:
         print(f"Error in get_email_status: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
+@mcp.tool()
+def get_email_content(
+    sender_domains: Optional[list] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    subject_contains: Optional[str] = None,
+    limit: Optional[int] = 20
+) -> str:
+    """Get stored email content for analysis
+    
+    Args:
+        sender_domains: Filter by sender domains (e.g., ["netflix.com", "spotify.com"]) (optional)
+        date_from: Start date in YYYY-MM-DD format (optional)
+        date_to: End date in YYYY-MM-DD format (optional)
+        subject_contains: Filter by subject line content (case-insensitive) (optional)
+        limit: Maximum number of emails to return (default: 20, max: 100)
+        
+    Returns emails that have content stored (content_fetched = 1).
+    Use this to analyze email content for subscription information.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Build query to get emails with content
+        query_parts = ["content_fetched = 1", "content IS NOT NULL"]
+        params = []
+        
+        if sender_domains:
+            domain_conditions = []
+            for domain in sender_domains:
+                domain_conditions.append("sender_domain = ?")
+                params.append(domain.lower())
+            query_parts.append(f"({' OR '.join(domain_conditions)})")
+        
+        if date_from:
+            query_parts.append("DATE(received_at) >= ?")
+            params.append(date_from)
+        
+        if date_to:
+            query_parts.append("DATE(received_at) <= ?")
+            params.append(date_to)
+        
+        if subject_contains:
+            query_parts.append("subject LIKE ?")
+            params.append(f"%{subject_contains}%")
+        
+        # Validate and cap limit
+        if limit is None or limit > 100:
+            limit = 20
+        elif limit < 1:
+            limit = 1
+        
+        query = f"""
+            SELECT 
+                gmail_message_id,
+                subject,
+                sender,
+                sender_domain,
+                received_at,
+                content
+            FROM processed_emails 
+            WHERE {' AND '.join(query_parts)}
+            ORDER BY received_at DESC 
+            LIMIT ?
+        """
+        params.append(limit)
+        
+        cursor.execute(query, params)
+        emails = cursor.fetchall()
+        conn.close()
+        
+        if not emails:
+            return json.dumps({
+                "success": True,
+                "message": "No emails found matching criteria",
+                "count": 0,
+                "emails": [],
+                "filters_applied": {
+                    "sender_domains": sender_domains or "none",
+                    "date_range": f"{date_from} to {date_to}" if date_from or date_to else "none",
+                    "subject_contains": subject_contains or "none",
+                    "limit": limit
+                }
+            }, indent=2)
+        
+        # Format results
+        result_emails = []
+        for email_data in emails:
+            gmail_id, subject, sender, sender_domain, received_at, content = email_data
+            
+            result_emails.append({
+                "gmail_message_id": gmail_id,
+                "subject": subject,
+                "sender": sender,
+                "sender_domain": sender_domain,
+                "received_at": received_at,
+                "content": content,
+                "content_length": len(content) if content else 0
+            })
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Found {len(emails)} emails with content",
+            "count": len(emails),
+            "emails": result_emails,
+            "filters_applied": {
+                "sender_domains": sender_domains or "none",
+                "date_range": f"{date_from} to {date_to}" if date_from or date_to else "none", 
+                "subject_contains": subject_contains or "none",
+                "limit": limit
+            }
+        }, indent=2)
+        
+    except Exception as e:
+        print(f"Error in get_email_content: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
 if __name__ == "__main__":
     mcp.run()

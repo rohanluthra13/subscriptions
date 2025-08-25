@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from email.utils import parsedate_to_datetime
 import time
 import pytz
+from contextlib import contextmanager
 
 # Load environment variables
 load_dotenv()
@@ -68,6 +69,16 @@ class SubscriptionManager:
         
         self.port = 8000
         self.redirect_uri = f"http://localhost:{self.port}/auth/callback"
+    
+    @contextmanager
+    def db_connection(self):
+        """Context manager for database connections - ensures proper cleanup"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row  # Enable column access by name
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def init_database(self):
         """Initialize SQLite database"""
@@ -523,108 +534,102 @@ class SubscriptionManager:
 
     def get_connections(self):
         """Get all Gmail connections"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM connections ORDER BY created_at DESC')
-        columns = [desc[0] for desc in cursor.description]
-        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        conn.close()
+        with self.db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM connections ORDER BY created_at DESC')
+            columns = [desc[0] for desc in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
         return results
 
     def get_subscriptions(self):
         """Get all subscriptions"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM subscriptions ORDER BY created_at DESC')
-        columns = [desc[0] for desc in cursor.description]
-        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        conn.close()
+        with self.db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM subscriptions ORDER BY created_at DESC')
+            columns = [desc[0] for desc in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
         return results
 
     def get_email_count(self):
         """Get total count of processed emails"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM processed_emails')
-        count = cursor.fetchone()[0]
-        conn.close()
+        with self.db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM processed_emails')
+            count = cursor.fetchone()[0]
         return count
 
     def get_processed_emails(self, limit: int = None, offset: int = 0, filters: dict = None):
         """Get processed emails with optional pagination and filters"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Build WHERE clause based on filters
-        where_parts = []
-        params = []
-        
-        if filters:
-            if filters.get('domain'):
-                where_parts.append('sender_domain = ?')
-                params.append(filters['domain'])
+        with self.db_connection() as conn:
+            cursor = conn.cursor()
             
-            if filters.get('has_content') is not None:
-                if filters['has_content']:
-                    where_parts.append('(content IS NOT NULL AND content != "")')
-                else:
-                    where_parts.append('(content IS NULL OR content = "")')
+            # Build WHERE clause based on filters
+            where_parts = []
+            params = []
             
-            if filters.get('email_account'):
-                where_parts.append('email = ?')
-                params.append(filters['email_account'])
-        
-        where_clause = ' WHERE ' + ' AND '.join(where_parts) if where_parts else ''
-        
-        # Get total count with filters
-        count_query = f'SELECT COUNT(*) FROM processed_emails{where_clause}'
-        cursor.execute(count_query, params)
-        total = cursor.fetchone()[0]
-        
-        # Get emails with optional pagination
-        if limit:
-            query = f'''
-                SELECT * FROM processed_emails{where_clause}
-                ORDER BY received_at DESC 
-                LIMIT ? OFFSET ?
-            '''
-            cursor.execute(query, params + [limit, offset])
-        else:
-            query = f'''
-                SELECT * FROM processed_emails{where_clause}
-                ORDER BY received_at DESC
-            '''
-            cursor.execute(query, params)
-        
-        columns = [desc[0] for desc in cursor.description]
-        emails = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        conn.close()
+            if filters:
+                if filters.get('domain'):
+                    where_parts.append('sender_domain = ?')
+                    params.append(filters['domain'])
+                
+                if filters.get('has_content') is not None:
+                    if filters['has_content']:
+                        where_parts.append('(content IS NOT NULL AND content != "")')
+                    else:
+                        where_parts.append('(content IS NULL OR content = "")')
+                
+                if filters.get('email_account'):
+                    where_parts.append('email = ?')
+                    params.append(filters['email_account'])
+            
+            where_clause = ' WHERE ' + ' AND '.join(where_parts) if where_parts else ''
+            
+            # Get total count with filters
+            count_query = f'SELECT COUNT(*) FROM processed_emails{where_clause}'
+            cursor.execute(count_query, params)
+            total = cursor.fetchone()[0]
+            
+            # Get emails with optional pagination
+            if limit:
+                query = f'''
+                    SELECT * FROM processed_emails{where_clause}
+                    ORDER BY received_at DESC 
+                    LIMIT ? OFFSET ?
+                '''
+                cursor.execute(query, params + [limit, offset])
+            else:
+                query = f'''
+                    SELECT * FROM processed_emails{where_clause}
+                    ORDER BY received_at DESC
+                '''
+                cursor.execute(query, params)
+            
+            columns = [desc[0] for desc in cursor.description]
+            emails = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
         return {"emails": emails, "total": total}
 
     def get_unique_domains(self):
         """Get list of unique sender domains with email counts"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT sender_domain, COUNT(*) as count 
-            FROM processed_emails 
-            WHERE sender_domain IS NOT NULL AND sender_domain != ''
-            GROUP BY sender_domain 
-            ORDER BY count DESC
-        ''')
-        domains = [{'domain': row[0], 'count': row[1]} for row in cursor.fetchall()]
-        conn.close()
+        with self.db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT sender_domain, COUNT(*) as count 
+                FROM processed_emails 
+                WHERE sender_domain IS NOT NULL AND sender_domain != ''
+                GROUP BY sender_domain 
+                ORDER BY count DESC
+            ''')
+            domains = [{'domain': row[0], 'count': row[1]} for row in cursor.fetchall()]
         return domains
 
     def reset_database(self):
         """Clear all data and force fresh authentication"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM processed_emails')
-        cursor.execute('DELETE FROM connections')
-        conn.commit()
-        conn.close()
+        with self.db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM processed_emails')
+            cursor.execute('DELETE FROM connections')
+            conn.commit()
         print("Database reset complete - fresh authentication required")
 
 
@@ -634,6 +639,15 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.sm = subscription_manager
         self.job_manager = job_manager
         super().__init__(*args, **kwargs)
+    
+    def send_json_response(self, data, status=200):
+        """Helper method to send JSON responses consistently"""
+        response_json = json.dumps(data, indent=2)
+        self.send_response(status)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Content-length', str(len(response_json)))
+        self.end_headers()
+        self.wfile.write(response_json.encode())
 
     def do_GET(self):
         """Handle GET requests"""
@@ -1080,13 +1094,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             }
         }
         
-        response_json = json.dumps(response_data, indent=2)
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Content-length', str(len(response_json)))
-        self.end_headers()
-        self.wfile.write(response_json.encode())
+        self.send_json_response(response_data)
 
     def api_fetch_emails(self):
         """Start email fetch in background and return job ID"""
@@ -1339,14 +1347,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     def handle_api_fetch(self):
         """Handle API fetch request (returns JSON)"""
         result = self.api_fetch_emails()
-        
-        response_json = json.dumps(result, indent=2)
-        
-        self.send_response(200 if result["success"] else 400)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Content-length', str(len(response_json)))
-        self.end_headers()
-        self.wfile.write(response_json.encode())
+        self.send_json_response(result, status=200 if result["success"] else 400)
 
     def handle_api_fetch_content(self):
         """Handle API fetch email content request (returns JSON)"""
@@ -1363,14 +1364,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             request_data = {}
         
         result = self.api_fetch_email_content(request_data)
-        
-        response_json = json.dumps(result, indent=2)
-        
-        self.send_response(200 if result["success"] else 400)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Content-length', str(len(response_json)))
-        self.end_headers()
-        self.wfile.write(response_json.encode())
+        self.send_json_response(result, status=200 if result["success"] else 400)
 
 
     def format_datetime_nz(self, iso_datetime_str):

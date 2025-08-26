@@ -319,8 +319,8 @@ def update_subscription(
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
-def trigger_email_fetch(quick_sync: bool = True) -> str:
-    """Trigger Gmail email fetch from running app
+def fetch_email_metadata(quick_sync: bool = True) -> str:
+    """Trigger Gmail email metadata fetch from running app
     
     Args:
         quick_sync: If True, fetch recent emails only (fast). If False, full year sync.
@@ -360,7 +360,7 @@ def trigger_email_fetch(quick_sync: bool = True) -> str:
         if response.status_code == 200:
             return json.dumps({
                 "success": True,
-                "message": f"Email fetch triggered ({'quick' if quick_sync else 'full'} sync)",
+                "message": f"Email metadata fetch triggered ({'quick' if quick_sync else 'full'} sync)",
                 "note": "This may take 1-15 minutes depending on email volume",
                 "status_url": f"{app_url}/status"
             })
@@ -371,7 +371,7 @@ def trigger_email_fetch(quick_sync: bool = True) -> str:
             })
             
     except Exception as e:
-        print(f"Error in trigger_email_fetch: {e}", file=sys.stderr)
+        print(f"Error in fetch_email_metadata: {e}", file=sys.stderr)
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
@@ -468,7 +468,7 @@ def fetch_email_content(
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
-def get_email_status() -> str:
+def get_app_status() -> str:
     """Get email system status and statistics
     
     Returns:
@@ -532,7 +532,7 @@ def get_email_status() -> str:
         return json.dumps(status, indent=2)
         
     except Exception as e:
-        print(f"Error in get_email_status: {e}", file=sys.stderr)
+        print(f"Error in get_app_status: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
 @mcp.tool()
@@ -651,6 +651,260 @@ def get_email_content(
         
     except Exception as e:
         print(f"Error in get_email_content: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
+def get_email_metadata(
+    sender_domains: Optional[list] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: Optional[int] = 100
+) -> str:
+    """Get email metadata for analysis (without content)
+    
+    Args:
+        sender_domains: Filter by sender domains (e.g., ["netflix.com", "spotify.com"]) (optional)
+        date_from: Start date in YYYY-MM-DD format (optional)
+        date_to: End date in YYYY-MM-DD format (optional)
+        limit: Maximum number of emails to return (default: 100, max: 500)
+        
+    Returns email metadata for LLM analysis to decide which content to fetch.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Build query
+        query_parts = []
+        params = []
+        
+        if sender_domains:
+            domain_conditions = []
+            for domain in sender_domains:
+                domain_conditions.append("sender_domain = ?")
+                params.append(domain.lower())
+            query_parts.append(f"({' OR '.join(domain_conditions)})")
+        
+        if date_from:
+            query_parts.append("DATE(received_at) >= ?")
+            params.append(date_from)
+        
+        if date_to:
+            query_parts.append("DATE(received_at) <= ?")
+            params.append(date_to)
+        
+        # Validate and cap limit
+        if limit is None or limit > 500:
+            limit = 100
+        elif limit < 1:
+            limit = 1
+        
+        where_clause = f"WHERE {' AND '.join(query_parts)}" if query_parts else ""
+        
+        query = f"""
+            SELECT 
+                gmail_message_id,
+                subject,
+                sender,
+                sender_domain,
+                received_at,
+                content_fetched
+            FROM processed_emails 
+            {where_clause}
+            ORDER BY received_at DESC 
+            LIMIT ?
+        """
+        params.append(limit)
+        
+        cursor.execute(query, params)
+        emails = cursor.fetchall()
+        conn.close()
+        
+        # Format results
+        result_emails = []
+        for email_data in emails:
+            gmail_id, subject, sender, sender_domain, received_at, content_fetched = email_data
+            
+            result_emails.append({
+                "gmail_message_id": gmail_id,
+                "subject": subject,
+                "sender": sender,
+                "sender_domain": sender_domain,
+                "received_at": received_at,
+                "has_content": bool(content_fetched)
+            })
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Found {len(emails)} emails",
+            "count": len(emails),
+            "emails": result_emails,
+            "filters_applied": {
+                "sender_domains": sender_domains or "none",
+                "date_range": f"{date_from} to {date_to}" if date_from or date_to else "none",
+                "limit": limit
+            }
+        }, indent=2)
+        
+    except Exception as e:
+        print(f"Error in get_email_metadata: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
+def get_scratchpad_items() -> str:
+    """Get all scratchpad items for review
+    
+    Returns all items from the scratchpad table, ordered by creation date (newest first).
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, item, processed, created_at 
+            FROM scratchpad 
+            ORDER BY created_at DESC
+        """)
+        items = cursor.fetchall()
+        conn.close()
+        
+        if not items:
+            return json.dumps({
+                "success": True,
+                "message": "No scratchpad items found",
+                "count": 0,
+                "items": []
+            }, indent=2)
+        
+        # Format results
+        result_items = []
+        for item_data in items:
+            item_id, item_text, processed, created_at = item_data
+            
+            result_items.append({
+                "id": item_id,
+                "item": item_text,
+                "processed": bool(processed),
+                "created_at": created_at
+            })
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Found {len(items)} scratchpad items",
+            "count": len(items),
+            "items": result_items
+        }, indent=2)
+        
+    except Exception as e:
+        print(f"Error in get_scratchpad_items: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
+def add_scratchpad_item(item: str) -> str:
+    """Add a new item to the scratchpad
+    
+    Args:
+        item: The text content to add to the scratchpad
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Insert new scratchpad item
+        cursor.execute("""
+            INSERT INTO scratchpad (item, processed, created_at) 
+            VALUES (?, 0, datetime('now'))
+        """, (item,))
+        
+        conn.commit()
+        item_id = cursor.lastrowid
+        conn.close()
+        
+        return json.dumps({
+            "success": True,
+            "message": "Added scratchpad item",
+            "item": {
+                "id": item_id,
+                "item": item,
+                "processed": False
+            }
+        }, indent=2)
+        
+    except Exception as e:
+        print(f"Error in add_scratchpad_item: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
+def update_scratchpad_item(item_id: str, item: Optional[str] = None, processed: Optional[bool] = None) -> str:
+    """Update an existing scratchpad item
+    
+    Args:
+        item_id: The ID of the scratchpad item to update
+        item: New text content (optional)
+        processed: New processed status (optional)
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if item exists
+        cursor.execute("SELECT id FROM scratchpad WHERE id = ?", (item_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return json.dumps({
+                "success": False,
+                "error": f"No scratchpad item found with ID '{item_id}'"
+            })
+        
+        # Build update query dynamically
+        updates = []
+        params = []
+        
+        if item is not None:
+            updates.append("item = ?")
+            params.append(item)
+            
+        if processed is not None:
+            updates.append("processed = ?")
+            params.append(1 if processed else 0)
+            
+        if not updates:
+            conn.close()
+            return json.dumps({
+                "success": False,
+                "error": "No fields to update"
+            })
+        
+        # Execute update
+        params.append(item_id)
+        query = f"UPDATE scratchpad SET {', '.join(updates)} WHERE id = ?"
+        cursor.execute(query, params)
+        
+        conn.commit()
+        
+        # Get updated item
+        cursor.execute(
+            "SELECT id, item, processed, created_at FROM scratchpad WHERE id = ?",
+            (item_id,)
+        )
+        updated = cursor.fetchone()
+        conn.close()
+        
+        updated_id, updated_item, updated_processed, created_at = updated
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Updated scratchpad item {item_id}",
+            "item": {
+                "id": updated_id,
+                "item": updated_item,
+                "processed": bool(updated_processed),
+                "created_at": created_at
+            }
+        }, indent=2)
+        
+    except Exception as e:
+        print(f"Error in update_scratchpad_item: {e}", file=sys.stderr)
         return json.dumps({"success": False, "error": str(e)})
 
 if __name__ == "__main__":

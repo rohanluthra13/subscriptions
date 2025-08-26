@@ -835,11 +835,11 @@ def add_scratchpad_item(item: str) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
-def update_scratchpad_item(item_id: str, item: Optional[str] = None, processed: Optional[bool] = None) -> str:
+def update_scratchpad_item(item_id: int, item: Optional[str] = None, processed: Optional[bool] = None) -> str:
     """Update an existing scratchpad item
     
     Args:
-        item_id: The ID of the scratchpad item to update
+        item_id: The integer ID of the scratchpad item to update
         item: New text content (optional)
         processed: New processed status (optional)
     """

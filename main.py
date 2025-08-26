@@ -109,7 +109,8 @@ class SubscriptionManager:
                 received_at TIMESTAMP,
                 processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 content TEXT,
-                content_fetched BOOLEAN DEFAULT 0
+                content_fetched BOOLEAN DEFAULT 0,
+                analyzed_for_subscriptions BOOLEAN DEFAULT 0
             )
         ''')
         
@@ -141,6 +142,7 @@ class SubscriptionManager:
             )
         ''')
         
+        
         # Create indexes for better query performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_gmail_message_id ON processed_emails(gmail_message_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sender_domain ON processed_emails(sender_domain)')
@@ -166,6 +168,11 @@ class SubscriptionManager:
         
         try:
             cursor.execute('ALTER TABLE processed_emails ADD COLUMN content_fetched BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE processed_emails ADD COLUMN analyzed_for_subscriptions BOOLEAN DEFAULT 0')
         except sqlite3.OperationalError:
             pass
         
@@ -558,8 +565,8 @@ class SubscriptionManager:
             count = cursor.fetchone()[0]
         return count
 
-    def get_processed_emails(self, limit: int = None, offset: int = 0, filters: dict = None):
-        """Get processed emails with optional pagination and filters"""
+    def get_processed_emails(self, limit: int = None, offset: int = 0, filters: dict = None, sort_by: str = None, sort_dir: str = 'desc'):
+        """Get processed emails with optional pagination, filters, and sorting"""
         with self.db_connection() as conn:
             cursor = conn.cursor()
             
@@ -584,6 +591,22 @@ class SubscriptionManager:
             
             where_clause = ' WHERE ' + ' AND '.join(where_parts) if where_parts else ''
             
+            # Build ORDER BY clause
+            valid_sort_columns = {
+                'domain': 'sender_domain',
+                'sender': 'sender', 
+                'subject': 'subject',
+                'content': '(CASE WHEN content IS NOT NULL AND content != "" THEN 1 ELSE 0 END)',
+                'received': 'received_at'
+            }
+            
+            if sort_by and sort_by in valid_sort_columns:
+                order_column = valid_sort_columns[sort_by]
+                order_dir = 'ASC' if sort_dir.lower() == 'asc' else 'DESC'
+                order_clause = f'ORDER BY {order_column} {order_dir}'
+            else:
+                order_clause = 'ORDER BY received_at DESC'  # Default sort
+            
             # Get total count with filters
             count_query = f'SELECT COUNT(*) FROM processed_emails{where_clause}'
             cursor.execute(count_query, params)
@@ -593,14 +616,14 @@ class SubscriptionManager:
             if limit:
                 query = f'''
                     SELECT * FROM processed_emails{where_clause}
-                    ORDER BY received_at DESC 
+                    {order_clause}
                     LIMIT ? OFFSET ?
                 '''
                 cursor.execute(query, params + [limit, offset])
             else:
                 query = f'''
                     SELECT * FROM processed_emails{where_clause}
-                    ORDER BY received_at DESC
+                    {order_clause}
                 '''
                 cursor.execute(query, params)
             
@@ -773,7 +796,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         return self.render_subscriptions_table(subscriptions)
     
     def render_emails_view(self):
-        """Render emails table with filters and enhanced fields"""
+        """Render emails table with filters, sorting and enhanced fields"""
         # Get filter parameters from URL
         url = urlparse(self.path)
         params = parse_qs(url.query)
@@ -785,13 +808,18 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         if params.get('has_content'):
             filters['has_content'] = params['has_content'][0] == 'true'
         
+        # Parse sorting parameters
+        sort_by = params.get('sort', [None])[0]
+        sort_dir = params.get('dir', ['desc'])[0]
+        
         # Parse pagination parameters
         page = int(params.get('page', [1])[0])
         page_size = 50
         offset = (page - 1) * page_size
         
-        # Get filtered emails with pagination
-        data = self.sm.get_processed_emails(filters=filters, limit=page_size, offset=offset)
+        # Get filtered and sorted emails with pagination
+        data = self.sm.get_processed_emails(filters=filters, limit=page_size, offset=offset, 
+                                          sort_by=sort_by, sort_dir=sort_dir)
         emails = data['emails']
         total = data['total']
         
@@ -855,26 +883,59 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         start_item = offset + 1
         end_item = min(offset + page_size, total)
         
-        # Build query string for preserving filters in pagination links
-        filter_params = []
+        # Build query string for preserving filters and sorting in pagination links
+        query_params = []
         if filters.get('domain'):
-            filter_params.append(f"domain={filters['domain']}")
+            query_params.append(f"domain={filters['domain']}")
         if filters.get('has_content') is not None:
-            filter_params.append(f"has_content={'true' if filters['has_content'] else 'false'}")
-        filter_query = '&'.join(filter_params)
-        filter_suffix = '&' + filter_query if filter_query else ''
+            query_params.append(f"has_content={'true' if filters['has_content'] else 'false'}")
+        if sort_by:
+            query_params.append(f"sort={sort_by}")
+            query_params.append(f"dir={sort_dir}")
+        query_string = '&'.join(query_params)
+        query_suffix = '&' + query_string if query_string else ''
         
         # Generate pagination links
         if prev_page:
-            prev_link = f'<a href="/?view=emails&page={prev_page}{filter_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-right: 5px;">&larr; Previous</a>'
+            prev_link = f'<a href="/?view=emails&page={prev_page}{query_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-right: 5px;">&larr; Previous</a>'
         else:
             prev_link = '<span style="padding: 5px 10px; background: #f9f9f9; color: #ccc; border: 1px solid #eee; margin-right: 5px;">&larr; Previous</span>'
             
         if next_page:
-            next_link = f'<a href="/?view=emails&page={next_page}{filter_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-left: 5px;">Next &rarr;</a>'
+            next_link = f'<a href="/?view=emails&page={next_page}{query_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-left: 5px;">Next &rarr;</a>'
         else:
             next_link = '<span style="padding: 5px 10px; background: #f9f9f9; color: #ccc; border: 1px solid #eee; margin-left: 5px;">Next &rarr;</span>'
         
+        # Generate sortable column headers
+        def generate_sort_header(column_name, display_name, current_sort, current_dir):
+            """Generate clickable header with sort indicators"""
+            if current_sort == column_name:
+                # Currently sorted by this column - show indicator and toggle direction
+                indicator = ' ↑' if current_dir == 'asc' else ' ↓'
+                new_dir = 'desc' if current_dir == 'asc' else 'asc'
+            else:
+                # Not currently sorted by this column - default to desc, no indicator
+                indicator = ''
+                new_dir = 'desc'
+            
+            # Build URL preserving filters
+            sort_params = query_params.copy() if query_params else []
+            # Remove existing sort params if any
+            sort_params = [p for p in sort_params if not (p.startswith('sort=') or p.startswith('dir='))]
+            sort_params.extend([f'sort={column_name}', f'dir={new_dir}'])
+            sort_query = '&'.join(sort_params)
+            sort_url = f'/?view=emails&{sort_query}' if sort_query else f'/?view=emails&sort={column_name}&dir={new_dir}'
+            
+            return f'<a href="{sort_url}" style="text-decoration: none; color: #333; font-weight: bold;">{display_name}{indicator}</a>'
+        
+        column_headers = {
+            'domain_header': generate_sort_header('domain', 'Domain', sort_by, sort_dir),
+            'sender_header': generate_sort_header('sender', 'Sender', sort_by, sort_dir),
+            'subject_header': generate_sort_header('subject', 'Subject', sort_by, sort_dir),
+            'content_header': generate_sort_header('content', 'Content', sort_by, sort_dir),
+            'received_header': generate_sort_header('received', 'Received', sort_by, sort_dir)
+        }
+
         return self.render_template('emails_view.html',
             total=total,
             filter_text=filter_text,
@@ -888,7 +949,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             start_item=start_item,
             end_item=end_item,
             prev_link=prev_link,
-            next_link=next_link
+            next_link=next_link,
+            # Sort headers
+            **column_headers
         )
     
     def render_subscriptions_table(self, subscriptions):

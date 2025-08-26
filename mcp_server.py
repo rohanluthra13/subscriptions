@@ -32,24 +32,30 @@ def analyze_email_metadata() -> list[base.Message]:
     """
     prompt = """You are analyzing email metadata to identify subscription services.
 
-First, retrieve existing subscriptions and recent email metadata:
-1. Call get_subscriptions() to see current subscriptions
-2. Call get_email_metadata(limit=500) to get recent emails
+Process:
+1. Call get_subscriptions() to see existing subscriptions
+2. Repeatedly call get_email_metadata() to process all unanalyzed emails:
+   - Each call returns ~300-400 emails that fit in the response
+   - Only unanalyzed emails are returned (analyzed_for_subscriptions=false)
+   - Response format: {"count": N, "emails": [{"id": "...", "subj": "...", "from": "...", "date": "..."}]}
+3. After each batch, call mark_emails_analyzed(email_ids) with all the IDs you processed
+4. Continue until get_email_metadata() returns count=0 (all emails analyzed)
 
-Then analyze the email metadata by domain to identify likely subscription services. Look for patterns like:
-- Regular billing/invoice emails
-- Account notifications
-- Subscription confirmations/cancellations
-- Payment receipts
+Analysis approach:
+- Track subscription patterns across all batches in your conversation memory
+- Look for recurring billing, renewal, account notification patterns
+- Group related domains (e.g., netflix.com + dvd.netflix.com)
+- Focus on domains NOT already in the subscriptions table
 
-For each likely subscription service found, call add_scratchpad_item() with this format:
+Final output:
+After processing all emails, call add_scratchpad_item() for each discovered subscription:
 ```
 Likely subscription service: [Service Name]
-Domains: [domain1.com, domain2.com]
-Notes: [Evidence like "monthly invoice emails", "subscription renewal notices"]
+Domains: [domain1.com, domain2.com] 
+Notes: [Evidence across all batches, e.g. "12 monthly billing emails", "renewal notices every 30 days"]
 ```
 
-Focus on domains not already in the subscriptions table. Group multiple domains from the same service together (e.g., netflix.com and dvd.netflix.com)."""
+The system handles batching automatically - just keep calling get_email_metadata() until done."""
     
     return [base.UserMessage(prompt)]
 
@@ -420,7 +426,7 @@ def fetch_email_content(
     date_to: Optional[str] = None,
     limit: Optional[int] = 50
 ) -> str:
-    """Fetch full content for specific emails to enable subscription analysis
+    """Trigger background fetching of full email content from Gmail
     
     Args:
         email_ids: List of specific Gmail message IDs to fetch content for (optional)
@@ -430,7 +436,7 @@ def fetch_email_content(
         limit: Maximum number of emails to fetch content for (default: 50, max: 200)
         
     Only fetches content for emails where content hasn't been fetched yet.
-    Use this to get full email body text for subscription analysis.
+    This is a background operation that may take several minutes.
     
     Requires main.py to be running on localhost:8000
     """
@@ -507,14 +513,14 @@ def fetch_email_content(
 
 @mcp.tool()
 def get_app_status() -> str:
-    """Get email system status and statistics
+    """Get comprehensive system status and email database statistics
     
-    Returns:
-        - Gmail connection status and account
-        - Total emails in database
-        - Recent email activity (last 24h)
-        - Last sync timestamp
-        - Whether main.py server is running
+    Returns detailed information including:
+        - Gmail connection status and authenticated account
+        - Total emails stored in local database
+        - Recent email processing activity (last 24 hours)
+        - Last synchronization timestamp and time elapsed
+        - Whether main.py web server is accessible on localhost:8000
     """
     try:
         conn = get_db_connection()
@@ -581,7 +587,7 @@ def get_email_content(
     subject_contains: Optional[str] = None,
     limit: Optional[int] = 20
 ) -> str:
-    """Get stored email content for analysis
+    """Retrieve stored full email content from database
     
     Args:
         sender_domains: Filter by sender domains (e.g., ["netflix.com", "spotify.com"]) (optional)
@@ -590,8 +596,8 @@ def get_email_content(
         subject_contains: Filter by subject line content (case-insensitive) (optional)
         limit: Maximum number of emails to return (default: 20, max: 100)
         
-    Returns emails that have content stored (content_fetched = 1).
-    Use this to analyze email content for subscription information.
+    Returns emails that have full content stored (content_fetched = 1).
+    Use when you need to read actual email body text for detailed analysis.
     """
     try:
         conn = get_db_connection()
@@ -696,17 +702,19 @@ def get_email_metadata(
     sender_domains: Optional[list] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    limit: Optional[int] = 100
+    include_analyzed: bool = False
 ) -> str:
-    """Get email metadata for analysis (without content)
+    """Get unanalyzed email metadata for subscription analysis
     
     Args:
-        sender_domains: Filter by sender domains (e.g., ["netflix.com", "spotify.com"]) (optional)
+        sender_domains: Filter by specific domains if needed (optional)
         date_from: Start date in YYYY-MM-DD format (optional)
         date_to: End date in YYYY-MM-DD format (optional)
-        limit: Maximum number of emails to return (default: 100, max: 500)
-        
-    Returns email metadata for LLM analysis to decide which content to fetch.
+        include_analyzed: Include emails already analyzed for subscriptions (default: False)
+    
+    Returns unanalyzed emails in compact format: {"id", "subj", "from", "date"}.
+    Automatically limited by response size (~300-400 emails per call).
+    Call repeatedly until count=0 to process all unanalyzed emails.
     """
     try:
         conn = get_db_connection()
@@ -715,6 +723,10 @@ def get_email_metadata(
         # Build query
         query_parts = []
         params = []
+        
+        # Skip already analyzed emails by default
+        if not include_analyzed:
+            query_parts.append("(analyzed_for_subscriptions = 0 OR analyzed_for_subscriptions IS NULL)")
         
         if sender_domains:
             domain_conditions = []
@@ -731,12 +743,6 @@ def get_email_metadata(
             query_parts.append("DATE(received_at) <= ?")
             params.append(date_to)
         
-        # Validate and cap limit
-        if limit is None or limit > 500:
-            limit = 100
-        elif limit < 1:
-            limit = 1
-        
         where_clause = f"WHERE {' AND '.join(query_parts)}" if query_parts else ""
         
         query = f"""
@@ -749,40 +755,52 @@ def get_email_metadata(
                 content_fetched
             FROM processed_emails 
             {where_clause}
-            ORDER BY received_at DESC 
-            LIMIT ?
+            ORDER BY received_at DESC
         """
-        params.append(limit)
         
         cursor.execute(query, params)
         emails = cursor.fetchall()
         conn.close()
         
-        # Format results
+        # Format results - optimized for size with character limit
         result_emails = []
+        char_count = 100  # Approximate starting size for wrapper JSON
+        max_chars = 95000  # Stay well under 100K limit
+        actual_count = 0
+        
         for email_data in emails:
             gmail_id, subject, sender, sender_domain, received_at, content_fetched = email_data
             
-            result_emails.append({
-                "gmail_message_id": gmail_id,
-                "subject": subject,
-                "sender": sender,
-                "sender_domain": sender_domain,
-                "received_at": received_at,
-                "has_content": bool(content_fetched)
-            })
-        
-        return json.dumps({
-            "success": True,
-            "message": f"Found {len(emails)} emails",
-            "count": len(emails),
-            "emails": result_emails,
-            "filters_applied": {
-                "sender_domains": sender_domains or "none",
-                "date_range": f"{date_from} to {date_to}" if date_from or date_to else "none",
-                "limit": limit
+            # Compact format: shorter keys, no redundant data
+            email_obj = {
+                "id": gmail_id,
+                "subj": subject,
+                "from": sender,
+                "date": received_at
             }
-        }, indent=2)
+            
+            # Estimate size of this email in JSON (rough but fast)
+            email_json_size = len(json.dumps(email_obj)) + 2  # +2 for comma and space
+            
+            if char_count + email_json_size > max_chars:
+                break  # Stop adding emails if we'd exceed limit
+                
+            result_emails.append(email_obj)
+            char_count += email_json_size
+            actual_count += 1
+        
+        response = {
+            "success": True,
+            "count": actual_count,
+            "total_available": len(emails),
+            "emails": result_emails
+        }
+        
+        if actual_count < len(emails):
+            response["truncated"] = True
+            response["message"] = f"Limited to {actual_count} of {len(emails)} emails due to size constraints"
+        
+        return json.dumps(response)  # No indent for compact output
         
     except Exception as e:
         print(f"Error in get_email_metadata: {e}", file=sys.stderr)
@@ -871,6 +889,44 @@ def add_scratchpad_item(item: str) -> str:
     except Exception as e:
         print(f"Error in add_scratchpad_item: {e}", file=sys.stderr)
         return json.dumps({"success": False, "error": str(e)})
+
+@mcp.tool()
+def mark_emails_analyzed(email_ids: list[str]) -> str:
+    """Mark emails as analyzed for subscription detection
+    
+    Args:
+        email_ids: List of Gmail message IDs to mark as analyzed
+    
+    Updates the analyzed_for_subscriptions flag to prevent re-analysis.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Build placeholders for SQL IN clause
+        placeholders = ','.join('?' * len(email_ids))
+        
+        cursor.execute(f"""
+            UPDATE processed_emails 
+            SET analyzed_for_subscriptions = 1
+            WHERE gmail_message_id IN ({placeholders})
+        """, email_ids)
+        
+        updated_count = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Marked {updated_count} emails as analyzed",
+            "updated_count": updated_count,
+            "requested_count": len(email_ids)
+        }, indent=2)
+        
+    except Exception as e:
+        print(f"Error in mark_emails_analyzed: {e}", file=sys.stderr)
+        return json.dumps({"success": False, "error": str(e)})
+
 
 @mcp.tool()
 def update_scratchpad_item(item_id: int, item: Optional[str] = None, processed: Optional[bool] = None) -> str:

@@ -80,6 +80,7 @@ Note: Tables are independent - no formal foreign key relationships implemented
 | processed_at      | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | When record was created               |
 | content           | TEXT      | -                                 | Full email body content (HTML/text)  |
 | content_fetched   | BOOLEAN   | DEFAULT 0                         | Whether content has been fetched     |
+| analyzed_for_subscriptions | BOOLEAN | DEFAULT 0                | Whether email has been analyzed by LLM for subscription detection |
 
 **Indexes:**
 - `idx_gmail_message_id` on `gmail_message_id` - Fast duplicate checking
@@ -115,6 +116,7 @@ Note: Tables are independent - no formal foreign key relationships implemented
 | item            | TEXT      | NOT NULL                          | User-entered subscription info           |
 | processed       | BOOLEAN   | DEFAULT 0                         | Whether item has been processed         |
 | created_at      | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | When item was added                      |
+
 
 ## Relationships
 

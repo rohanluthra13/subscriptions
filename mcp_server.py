@@ -11,9 +11,47 @@ import requests
 from datetime import datetime, timedelta
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.prompts import base
+from pydantic import Field
 
 # Initialize MCP server
 mcp = FastMCP("subscriptions")
+
+# Register prompts
+@mcp.prompt(
+    name="analyze_email_metadata",
+    description="Analyze email metadata to identify subscription services"
+)
+def analyze_email_metadata() -> list[base.Message]:
+    """Analyze email metadata to identify subscription services
+    
+    This prompt guides the LLM to:
+    1. Retrieve existing subscriptions and email metadata
+    2. Analyze patterns to identify subscription services
+    3. Write findings to the scratchpad
+    """
+    prompt = """You are analyzing email metadata to identify subscription services.
+
+First, retrieve existing subscriptions and recent email metadata:
+1. Call get_subscriptions() to see current subscriptions
+2. Call get_email_metadata(limit=500) to get recent emails
+
+Then analyze the email metadata by domain to identify likely subscription services. Look for patterns like:
+- Regular billing/invoice emails
+- Account notifications
+- Subscription confirmations/cancellations
+- Payment receipts
+
+For each likely subscription service found, call add_scratchpad_item() with this format:
+```
+Likely subscription service: [Service Name]
+Domains: [domain1.com, domain2.com]
+Notes: [Evidence like "monthly invoice emails", "subscription renewal notices"]
+```
+
+Focus on domains not already in the subscriptions table. Group multiple domains from the same service together (e.g., netflix.com and dvd.netflix.com)."""
+    
+    return [base.UserMessage(prompt)]
 
 def get_db_connection():
     """Get SQLite database connection"""

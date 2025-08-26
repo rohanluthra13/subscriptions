@@ -785,8 +785,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         if params.get('has_content'):
             filters['has_content'] = params['has_content'][0] == 'true'
         
-        # Get filtered emails
-        data = self.sm.get_processed_emails(filters=filters)
+        # Parse pagination parameters
+        page = int(params.get('page', [1])[0])
+        page_size = 50
+        offset = (page - 1) * page_size
+        
+        # Get filtered emails with pagination
+        data = self.sm.get_processed_emails(filters=filters, limit=page_size, offset=offset)
         emails = data['emails']
         total = data['total']
         
@@ -801,7 +806,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         # Build email rows with more fields
         email_rows = ""
-        for email in emails[:500]:  # Limit display to 500 rows for performance
+        for email in emails:  # No slicing needed - we loaded exactly what we want
             # Check if email has content
             has_content = bool(email.get('content') and email['content'].strip())
             content_indicator = '✓' if has_content else '–'
@@ -842,7 +847,33 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         # Prepare template variables
         has_content_true_selected = 'selected' if filters.get('has_content') is True else ''
         has_content_false_selected = 'selected' if filters.get('has_content') is False else ''
-        display_count = min(500, len(emails))
+        
+        # Calculate pagination variables
+        total_pages = (total + page_size - 1) // page_size  # Ceiling division
+        prev_page = max(1, page - 1) if page > 1 else None
+        next_page = page + 1 if page < total_pages else None
+        start_item = offset + 1
+        end_item = min(offset + page_size, total)
+        
+        # Build query string for preserving filters in pagination links
+        filter_params = []
+        if filters.get('domain'):
+            filter_params.append(f"domain={filters['domain']}")
+        if filters.get('has_content') is not None:
+            filter_params.append(f"has_content={'true' if filters['has_content'] else 'false'}")
+        filter_query = '&'.join(filter_params)
+        filter_suffix = '&' + filter_query if filter_query else ''
+        
+        # Generate pagination links
+        if prev_page:
+            prev_link = f'<a href="/?view=emails&page={prev_page}{filter_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-right: 5px;">&larr; Previous</a>'
+        else:
+            prev_link = '<span style="padding: 5px 10px; background: #f9f9f9; color: #ccc; border: 1px solid #eee; margin-right: 5px;">&larr; Previous</span>'
+            
+        if next_page:
+            next_link = f'<a href="/?view=emails&page={next_page}{filter_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-left: 5px;">Next &rarr;</a>'
+        else:
+            next_link = '<span style="padding: 5px 10px; background: #f9f9f9; color: #ccc; border: 1px solid #eee; margin-left: 5px;">Next &rarr;</span>'
         
         return self.render_template('emails_view.html',
             total=total,
@@ -851,7 +882,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             has_content_true_selected=has_content_true_selected,
             has_content_false_selected=has_content_false_selected,
             email_rows=email_rows,
-            display_count=display_count
+            # Pagination variables
+            current_page=page,
+            total_pages=total_pages,
+            start_item=start_item,
+            end_item=end_item,
+            prev_link=prev_link,
+            next_link=next_link
         )
     
     def render_subscriptions_table(self, subscriptions):

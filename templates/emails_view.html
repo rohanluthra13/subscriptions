@@ -52,6 +52,15 @@
     </table>
 </div>
 
+<!-- Pagination Controls -->
+<div style="margin-top: 15px; text-align: center; padding: 10px; border-top: 1px solid #eee;">
+    <div style="margin-bottom: 10px;">
+        {{prev_link}}
+        <span style="margin: 0 15px; font-size: 13px;">Page {{current_page}} of {{total_pages}}</span>
+        {{next_link}}
+    </div>
+</div>
+
 <div style="margin-top: 10px; font-size: 11px; color: #666;">
-    Showing {{display_count}} of {{total}} emails. Content indicator: ✓ = has content, – = metadata only
+    Showing {{start_item}}-{{end_item}} of {{total}} emails. Content indicator: ✓ = has content, – = metadata only
 </div>

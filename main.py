@@ -897,14 +897,14 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         # Generate pagination links
         if prev_page:
-            prev_link = f'<a href="/?view=emails&page={prev_page}{query_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-right: 5px;">&larr; Previous</a>'
+            prev_link = f'<a href="/?view=emails&page={prev_page}{query_suffix}" style="text-decoration: none; color: #666; font-size: 12px; margin-right: 10px;">←</a>'
         else:
-            prev_link = '<span style="padding: 5px 10px; background: #f9f9f9; color: #ccc; border: 1px solid #eee; margin-right: 5px;">&larr; Previous</span>'
+            prev_link = '<span style="color: #ccc; font-size: 12px; margin-right: 10px;">←</span>'
             
         if next_page:
-            next_link = f'<a href="/?view=emails&page={next_page}{query_suffix}" style="text-decoration: none; padding: 5px 10px; background: #f5f5f5; border: 1px solid #ddd; margin-left: 5px;">Next &rarr;</a>'
+            next_link = f'<a href="/?view=emails&page={next_page}{query_suffix}" style="text-decoration: none; color: #666; font-size: 12px; margin-left: 10px;">→</a>'
         else:
-            next_link = '<span style="padding: 5px 10px; background: #f9f9f9; color: #ccc; border: 1px solid #eee; margin-left: 5px;">Next &rarr;</span>'
+            next_link = '<span style="color: #ccc; font-size: 12px; margin-left: 10px;">→</span>'
         
         # Generate sortable column headers
         def generate_sort_header(column_name, display_name, current_sort, current_dir):

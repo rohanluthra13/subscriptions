@@ -761,7 +761,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 <div style="text-align: right;">
                     {f'<div style="color: #008000; font-size: 14px; margin-bottom: 15px;">{fetch_results}</div>' if fetch_results else ''}
                     <div style="color: #666; font-size: 14px; margin-bottom: 30px;">last fetched:</div>
-                    <div style="color: #008000; font-size: 14px;">{connections[0]["last_sync_at"][:16] if connections[0]["last_sync_at"] else "never"}</div>
+                    <div style="color: #008000; font-size: 14px;">{self.format_datetime_nz(connections[0]["last_sync_at"]) if connections[0]["last_sync_at"] else "never"}</div>
                 </div>
                 '''
         else:

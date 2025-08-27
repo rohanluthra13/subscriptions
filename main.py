@@ -100,7 +100,7 @@ class SubscriptionManager:
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS processed_emails (
-                id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL,
                 gmail_message_id TEXT UNIQUE NOT NULL,
                 subject TEXT,
@@ -837,8 +837,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         for email in emails:  # No slicing needed - we loaded exactly what we want
             # Check if email has content
             has_content = bool(email.get('content') and email['content'].strip())
-            content_indicator = '✓' if has_content else '–'
-            content_style = 'color: #008000;' if has_content else 'color: #ccc;'
+            content_indicator = 'Y' if has_content else 'N'
+            content_style = 'color: #008000; font-weight: bold;' if has_content else 'color: #999;'
             
             # Truncate subject for display
             subject = email.get('subject', '')

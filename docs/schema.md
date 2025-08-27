@@ -21,7 +21,7 @@ SQLite database schema for the Subscription Manager application.
 ┌─────────────────────────────────┐          ┌─────────────────────────────────┐
 │      processed_emails           │          │        subscriptions            │
 ├─────────────────────────────────┤          ├─────────────────────────────────┤
-│ id (TEXT) PK                    │          │ id (TEXT) PK                    │
+│ id (INTEGER) PK AUTOINCREMENT   │          │ id (TEXT) PK                    │
 │ email (TEXT)                    │          │ name (TEXT) UNIQUE              │
 │ gmail_message_id (TEXT) UNIQUE  │          │ domains (TEXT/JSON)             │
 │ subject (TEXT)                  │          │ category (TEXT)                 │
@@ -70,7 +70,7 @@ Note: Tables are independent - no formal foreign key relationships implemented
 
 | Column            | Type      | Constraints                        | Description                           |
 |-------------------|-----------|-----------------------------------|---------------------------------------|
-| id                | TEXT      | PRIMARY KEY, DEFAULT randomblob   | Unique email record identifier        |
+| id                | INTEGER   | PRIMARY KEY, AUTOINCREMENT        | Sequential email record identifier    |
 | email             | TEXT      | NOT NULL                          | Gmail account that fetched this email |
 | gmail_message_id  | TEXT      | UNIQUE NOT NULL                   | Gmail's unique message identifier     |
 | subject           | TEXT      | -                                 | Email subject line                    |

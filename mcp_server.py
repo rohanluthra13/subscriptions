@@ -37,8 +37,8 @@ Process:
 2. Repeatedly call get_email_metadata() to process all unanalyzed emails:
    - Each call returns ~300-400 emails that fit in the response
    - Only unanalyzed emails are returned (analyzed_for_subscriptions=false)
-   - Response format: {"count": N, "emails": [{"id": "...", "subj": "...", "from": "...", "date": "..."}]}
-3. After each batch, call mark_emails_analyzed(email_ids) with all the IDs you processed
+   - Response format: {"count": N, "emails": [{"id": 1, "subj": "...", "from": "...", "date": "..."}]}
+3. After each batch, call mark_emails_analyzed(email_ids) with all the IDs you processed (e.g., [1, 2, 3, 4, ...])
 4. Continue until get_email_metadata() returns count=0 (all emails analyzed)
 
 Analysis approach:
@@ -747,6 +747,7 @@ def get_email_metadata(
         
         query = f"""
             SELECT 
+                id,
                 gmail_message_id,
                 subject,
                 sender,
@@ -769,11 +770,11 @@ def get_email_metadata(
         actual_count = 0
         
         for email_data in emails:
-            gmail_id, subject, sender, sender_domain, received_at, content_fetched = email_data
+            id, gmail_id, subject, sender, sender_domain, received_at, content_fetched = email_data
             
             # Compact format: shorter keys, no redundant data
             email_obj = {
-                "id": gmail_id,
+                "id": id,  # Now using our sequential ID
                 "subj": subject,
                 "from": sender,
                 "date": received_at
@@ -891,11 +892,11 @@ def add_scratchpad_item(item: str) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
-def mark_emails_analyzed(email_ids: list[str]) -> str:
+def mark_emails_analyzed(email_ids: list[int]) -> str:
     """Mark emails as analyzed for subscription detection
     
     Args:
-        email_ids: List of Gmail message IDs to mark as analyzed
+        email_ids: List of email IDs (integers) to mark as analyzed
     
     Updates the analyzed_for_subscriptions flag to prevent re-analysis.
     """
@@ -909,7 +910,7 @@ def mark_emails_analyzed(email_ids: list[str]) -> str:
         cursor.execute(f"""
             UPDATE processed_emails 
             SET analyzed_for_subscriptions = 1
-            WHERE gmail_message_id IN ({placeholders})
+            WHERE id IN ({placeholders})
         """, email_ids)
         
         updated_count = cursor.rowcount

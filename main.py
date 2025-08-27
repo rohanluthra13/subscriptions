@@ -827,7 +827,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         domains = self.sm.get_unique_domains()
         
         # Build domain filter options
-        domain_options = '<option value="">All domains</option>'
+        domain_options = '<option value="">all domains</option>'
         for domain_info in domains[:50]:  # Limit to top 50 domains
             selected = 'selected' if filters.get('domain') == domain_info['domain'] else ''
             domain_options += f'<option value="{domain_info["domain"]}" {selected}>{domain_info["domain"]} ({domain_info["count"]})</option>'

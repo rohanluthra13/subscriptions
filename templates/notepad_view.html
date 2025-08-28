@@ -1,36 +1,66 @@
-<div style="margin-bottom: 20px; padding: 15px;">
-    <h2 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">Notepad</h2>
-    <p style="color: #666; font-size: 12px; margin-bottom: 20px;">Add notes about your subscriptions and other reminders. These will help guide the AI analysis.</p>
-</div>
+<!-- Paper container for notepad -->
+<div class="paper-container">
+    <div style="margin-bottom: 20px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 600;">Notepad</h2>
+        <p style="color: #666; font-size: 12px; margin: 0;">Add notes about your subscriptions and other reminders. These will help guide the AI analysis.</p>
+    </div>
 
-<div style="height: 65vh; overflow-y: auto; padding: 0 15px;">
-    <form method="post" action="/save_notepad">
-        
-        <div style="margin-bottom: 30px;">
-            <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Subscriptions</h3>
-            <div id="subscriptions-list" style="margin-bottom: 10px;">
-                {{subscription_items}}
+    <div style="height: 50vh; overflow-y: auto; margin-bottom: 20px;">
+        <form method="post" action="/save_notepad">
+            
+            <div style="margin-bottom: 30px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Subscriptions</h3>
+                <div id="subscriptions-list" style="margin-bottom: 10px;">
+                    {{subscription_items}}
+                </div>
+                <button type="button" class="add-note" onclick="addNote('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add subscription note</button>
             </div>
-            <button type="button" class="add-note" onclick="addNote('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add subscription note</button>
-        </div>
-        
-        <div style="margin-bottom: 30px;">
-            <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Other Notes</h3>
-            <div id="other-notes-list" style="margin-bottom: 10px;">
-                {{other_notes_items}}
+            
+            <div style="margin-bottom: 30px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Other Notes</h3>
+                <div id="other-notes-list" style="margin-bottom: 10px;">
+                    {{other_notes_items}}
+                </div>
+                <button type="button" class="add-note" onclick="addNote('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add other note</button>
             </div>
-            <button type="button" class="add-note" onclick="addNote('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add other note</button>
-        </div>
-        
-    </form>
-</div>
+            
+        </form>
+    </div>
 
-<div style="margin-top: 15px; text-align: center; padding: 10px; border-top: 1px solid #eee;">
-    <button type="button" onclick="saveNotepad()" style="background: #007bff; color: white; border: none; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; margin-right: 8px;">save</button>
-    <a href="/" style="text-decoration: none;"><button type="button" style="background: white; color: #666; border: 1px solid #ddd; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit;">cancel</button></a>
+    <div style="text-align: center; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+        <button type="button" onclick="saveNotepad()" style="background: #007bff; color: white; border: none; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; margin-right: 8px;">save</button>
+        <a href="/" style="text-decoration: none;"><button type="button" style="background: white; color: #666; border: 1px solid #ddd; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit;">cancel</button></a>
+    </div>
 </div>
 
 <style>
+    /* Paper container effect */
+    .paper-container {
+        background: white;
+        border-radius: 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin: 20px auto;
+        width: clamp(300px, 85%, 700px);
+        padding: 40px;
+        position: relative;
+        transition: box-shadow 0.2s ease;
+    }
+    
+    /* Subtle texture overlay */
+    .paper-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, 
+            rgba(255,255,255,0) 0%, 
+            rgba(0,0,0,0.015) 100%);
+        pointer-events: none;
+    }
+    
+    /* Note items styling */
     .note-item { 
         display: flex; 
         align-items: center; 
@@ -38,6 +68,8 @@
         padding: 6px 8px; 
         background: #f8f9fa; 
         border-radius: 3px; 
+        position: relative;
+        z-index: 1;
     }
     .note-item input { 
         flex: 1; 

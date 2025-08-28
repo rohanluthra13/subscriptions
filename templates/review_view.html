@@ -1,0 +1,59 @@
+<!-- Header positioned above paper container -->
+<div style="margin: 20px auto 0 auto; width: clamp(300px, 85%, 700px); padding-left: 0;">
+    <p style="color: #666; font-size: 12px; margin: 0;">for review / are these your subscriptions? any other notes?</p>
+</div>
+
+<!-- Paper container for review -->
+<div class="paper-container" style="margin-top: 5px;">
+
+    <div style="height: 65vh; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column;">
+        <!-- Content area - currently blank, will be populated with LLM findings from llm_notes.md -->
+        <div id="review-content" style="flex: 1;">
+            <!-- Placeholder for future content -->
+        </div>
+    </div>
+
+    <div style="text-align: center; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+        <a href="/" style="text-decoration: none;">
+            <button type="button" style="background: white; color: #666; border: 1px solid #ddd; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit;">back to dashboard</button>
+        </a>
+    </div>
+</div>
+
+<style>
+    /* Paper container effect */
+    .paper-container {
+        background: white;
+        border-radius: 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin: 20px auto;
+        width: clamp(300px, 85%, 700px);
+        padding: 40px;
+        position: relative;
+        transition: box-shadow 0.2s ease;
+        font-family: "SF Mono", monospace;
+    }
+    
+    /* Subtle texture overlay */
+    .paper-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, 
+            rgba(255,255,255,0) 0%, 
+            rgba(0,0,0,0.015) 100%);
+        pointer-events: none;
+    }
+    
+    /* Content area styling */
+    #review-content {
+        position: relative;
+        z-index: 1;
+        color: #333;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+</style>

@@ -785,6 +785,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             return self.render_emails_view()
         elif view == 'notepad':
             return self.render_notepad_view()
+        elif view == 'review':
+            return self.render_review_view()
         else:
             return self.render_subscriptions_view()
     
@@ -1034,6 +1036,12 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             subscription_items=subscription_items,
             other_notes_items=other_notes_items
         )
+    
+    def render_review_view(self):
+        """Render review view for right panel"""
+        # For now, just render the empty template
+        # Future: will load content from resources/llm_notes.md
+        return self.render_template('review_view.html')
 
     def _generate_notepad_markdown(self, subscriptions, other_notes):
         """Generate markdown content from notepad sections"""

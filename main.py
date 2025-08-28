@@ -976,6 +976,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         subscriptions = []
         other_notes = []
         
+        # Ensure directory exists
+        os.makedirs('resources', exist_ok=True)
+        
         try:
             with open('resources/notepad.md', 'r') as f:
                 content = f.read()
@@ -994,8 +997,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                     elif current_section == 'other_notes':
                         other_notes.append(item)
         except FileNotFoundError:
-            # File doesn't exist yet, return empty lists
-            pass
+            # File doesn't exist yet, create it with default structure
+            default_content = "## Subscriptions\n\n## Other Notes\n"
+            with open('resources/notepad.md', 'w') as f:
+                f.write(default_content)
         
         return subscriptions, other_notes
 
@@ -1004,10 +1009,17 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         import html
         items = []
         for note in notes:
+            # Calculate initial rows based on content length
+            lines = note.count('\n') + 1
+            # Also account for wrapped lines (rough estimate)
+            estimated_rows = max(1, lines, len(note) // 80)
+            
             items.append(f'''
                 <div class="note-item">
                     <span class="bullet">•</span>
-                    <input type="text" name="{input_name}" value="{html.escape(note)}" />
+                    <textarea name="{input_name}" rows="{estimated_rows}" 
+                        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+                        onkeydown="if(event.key==='Enter' && !event.shiftKey){{event.preventDefault();addNote('{input_name.replace('_notes', '-notes') if '_notes' in input_name else input_name}')}}">{html.escape(note)}</textarea>
                 </div>''')
         return ''.join(items)
 
@@ -1039,25 +1051,39 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 
     def handle_notepad_save(self):
         """Handle saving notepad content"""
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length).decode('utf-8')
-        form_data = parse_qs(post_data)
-        
-        # Extract and clean form data
-        subscriptions = form_data.get('subscriptions', [])
-        other_notes = form_data.get('other_notes', [])
-        
-        # Generate and save markdown content
-        content = self._generate_notepad_markdown(subscriptions, other_notes)
-        
-        with open('resources/notepad.md', 'w') as f:
-            f.write(content)
-        
-        # Return success response for AJAX
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(b'{"success": true}')
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            form_data = parse_qs(post_data)
+            
+            # Extract and clean form data
+            subscriptions = form_data.get('subscriptions', [])
+            other_notes = form_data.get('other_notes', [])
+            
+            # Generate and save markdown content
+            content = self._generate_notepad_markdown(subscriptions, other_notes)
+            
+            # Ensure directory exists
+            os.makedirs('resources', exist_ok=True)
+            
+            # Write to file
+            with open('resources/notepad.md', 'w') as f:
+                f.write(content)
+            
+            # Return success response for AJAX
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"success": true}')
+            
+        except Exception as e:
+            print(f"Error saving notepad: {e}")
+            # Return error response
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            error_msg = json.dumps({"success": False, "error": str(e)})
+            self.wfile.write(error_msg.encode())
 
     def start_gmail_auth(self):
         """Redirect to Gmail OAuth"""

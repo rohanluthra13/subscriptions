@@ -31,7 +31,7 @@
     </div>
 
     <div style="text-align: center; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-        <button type="button" onclick="saveNotepad()" style="background: #007bff; color: white; border: none; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; margin-right: 8px;">save</button>
+        <button type="button" onclick="saveNotepad(event)" style="background: #007bff; color: white; border: none; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; margin-right: 8px;">save</button>
         <a href="/" style="text-decoration: none;"><button type="button" style="background: white; color: #666; border: 1px solid #ddd; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit;">cancel</button></a>
     </div>
 </div>
@@ -67,7 +67,7 @@
     /* Note items styling */
     .note-item { 
         display: flex; 
-        align-items: center; 
+        align-items: flex-start; 
         margin-bottom: 6px; 
         padding: 6px 8px; 
         background: white; 
@@ -75,16 +75,31 @@
         position: relative;
         z-index: 1;
     }
-    .note-item input { 
+    .note-item input, 
+    .note-item textarea { 
         flex: 1; 
         border: none; 
         background: white; 
         font-family: inherit; 
         font-size: 12px; 
         padding: 0;
+        width: 100%;
+        resize: none;
+        overflow: hidden;
+        word-wrap: break-word;
+        line-height: 1.4;
     }
-    .note-item input:focus { outline: none; }
-    .bullet { color: #666; margin-right: 6px; font-size: 12px; }
+    .note-item input:focus,
+    .note-item textarea:focus { 
+        outline: none; 
+    }
+    .bullet { 
+        color: #666; 
+        margin-right: 6px; 
+        font-size: 12px; 
+        margin-top: 1px;
+        flex-shrink: 0;
+    }
     .add-note:hover { color: #333; }
 </style>
 
@@ -98,29 +113,80 @@
         noteItem.className = 'note-item';
         noteItem.innerHTML = `
             <span class="bullet">•</span>
-            <input type="text" name="${inputName}" placeholder="enter note..." autofocus>
+            <textarea name="${inputName}" placeholder="enter note..." rows="1"></textarea>
         `;
         
         list.appendChild(noteItem);
         
-        // Focus the new input
-        const newInput = noteItem.querySelector('input');
-        newInput.focus();
+        // Focus the new textarea and add event listeners
+        const newTextarea = noteItem.querySelector('textarea');
+        newTextarea.focus();
+        
+        // Add Enter key handler
+        newTextarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                addNote(section);
+            }
+        });
+        
+        // Auto-resize textarea as user types
+        newTextarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
     }
     
-    function saveNotepad() {
-        const form = document.querySelector('form');
-        // Convert form data to POST request
-        const formData = new FormData(form);
+    function saveNotepad(event) {
+        // Get all input values directly
+        const params = new URLSearchParams();
+        
+        // Get all subscription inputs (both input and textarea elements)
+        const subInputs = document.querySelectorAll('input[name="subscriptions"], textarea[name="subscriptions"]');
+        subInputs.forEach(input => {
+            if (input.value.trim()) {  // Only add non-empty values
+                params.append('subscriptions', input.value);
+            }
+        });
+        
+        // Get all other_notes inputs (both input and textarea elements)
+        const notesInputs = document.querySelectorAll('input[name="other_notes"], textarea[name="other_notes"]');
+        notesInputs.forEach(input => {
+            if (input.value.trim()) {  // Only add non-empty values
+                params.append('other_notes', input.value);
+            }
+        });
+        
+        // Show saving indicator
+        const saveBtn = event.currentTarget;
+        const originalText = saveBtn.textContent;
+        saveBtn.textContent = 'saving...';
+        saveBtn.disabled = true;
         
         fetch('/save_notepad', {
             method: 'POST',
-            body: formData
-        }).then(response => {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: params.toString()
+        })
+        .then(response => {
             if (response.ok) {
-                // Reload the current view
-                window.location.reload();
+                saveBtn.textContent = 'saved!';
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                throw new Error(`Save failed: ${response.status}`);
             }
+        })
+        .catch(error => {
+            console.error('Save error:', error);
+            saveBtn.textContent = 'error - try again';
+            saveBtn.disabled = false;
+            setTimeout(() => {
+                saveBtn.textContent = originalText;
+            }, 2000);
         });
     }
     

@@ -654,6 +654,102 @@ class SubscriptionManager:
             cursor.execute('DELETE FROM connections')
             conn.commit()
         print("Database reset complete - fresh authentication required")
+    
+    def parse_llm_notes(self):
+        """Parse llm_notes.md file and extract subscription data for review UI"""
+        try:
+            with open('resources/llm_notes.md', 'r') as f:
+                content = f.read()
+        except FileNotFoundError:
+            return []
+        
+        subscriptions = []
+        lines = content.split('\n')
+        current_subscription = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Look for subscription names (lines starting with **)
+            if line.startswith('**') and line.endswith('**'):
+                if current_subscription:
+                    subscriptions.append(current_subscription)
+                
+                # Extract name between ** markers
+                name = line[2:-2].strip()
+                current_subscription = {
+                    'name': name,
+                    'user_checked': None,
+                    'user_notes': ''
+                }
+            
+            # Look for user check status
+            elif line.startswith('User Check:') and current_subscription:
+                if '[x] Yes' in line:
+                    current_subscription['user_checked'] = True
+                elif '[x] No' in line:
+                    current_subscription['user_checked'] = False
+                # else remains None (unchecked)
+            
+            # Look for user notes
+            elif line.startswith('User Notes:') and current_subscription:
+                # Extract text after "User Notes: "
+                notes_text = line[12:].strip()
+                current_subscription['user_notes'] = notes_text
+        
+        # Don't forget the last subscription
+        if current_subscription:
+            subscriptions.append(current_subscription)
+        
+        return subscriptions
+    
+    def update_llm_notes(self, subscription_updates):
+        """Update llm_notes.md file with user check/notes data"""
+        try:
+            with open('resources/llm_notes.md', 'r') as f:
+                content = f.read()
+        except FileNotFoundError:
+            return False
+        
+        # Create lookup dict by subscription name
+        updates = {item['name']: item for item in subscription_updates}
+        
+        lines = content.split('\n')
+        new_lines = []
+        current_name = None
+        
+        for line in lines:
+            # Check if this is a subscription name line
+            if line.strip().startswith('**') and line.strip().endswith('**'):
+                current_name = line.strip()[2:-2].strip()
+                new_lines.append(line)
+            
+            # Update User Check line
+            elif line.strip().startswith('User Check:') and current_name and current_name in updates:
+                update = updates[current_name]
+                if update['user_checked'] is True:
+                    new_lines.append('User Check: [x] Yes | [ ] No')
+                elif update['user_checked'] is False:
+                    new_lines.append('User Check: [ ] Yes | [x] No')
+                else:
+                    new_lines.append('User Check: [ ] Yes | [ ] No')
+            
+            # Update User Notes line
+            elif line.strip().startswith('User Notes:') and current_name and current_name in updates:
+                update = updates[current_name]
+                new_lines.append(f"User Notes: {update['user_notes']}")
+            
+            else:
+                new_lines.append(line)
+        
+        # Write back to file
+        try:
+            with open('resources/llm_notes.md', 'w') as f:
+                f.write('\n'.join(new_lines))
+            return True
+        except Exception as e:
+            print(f"Error writing llm_notes.md: {e}")
+            return False
 
 
 
@@ -712,6 +808,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_metadata_fetch()
         elif path == '/save_notepad':
             self.handle_notepad_save()
+        elif path == '/save_review':
+            self.handle_review_save()
         elif path == '/api/fetch':
             self.handle_api_fetch()
         elif path == '/api/fetch_email_content':
@@ -1039,9 +1137,43 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     
     def render_review_view(self):
         """Render review view for right panel"""
-        # For now, just render the empty template
-        # Future: will load content from resources/llm_notes.md
-        return self.render_template('review_view.html')
+        # Parse llm_notes.md and get subscription data
+        subscriptions = self.sm.parse_llm_notes()
+        
+        # Generate HTML for the subscription checklist
+        checklist_html = ""
+        for i, sub in enumerate(subscriptions):
+            checked_yes = 'checked' if sub['user_checked'] is True else ''
+            checked_no = 'checked' if sub['user_checked'] is False else ''
+            
+            # Escape HTML special characters in name and notes
+            escaped_name = sub['name'].replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
+            escaped_notes = sub['user_notes'].replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
+            
+            checklist_html += f'''
+            <div class="subscription-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 4px;">
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <strong style="flex: 1; font-size: 14px;">{escaped_name}</strong>
+                    <div style="display: flex; gap: 15px;">
+                        <label style="font-size: 12px; color: #666;">
+                            <input type="radio" name="check_{i}" value="yes" {checked_yes}> Yes
+                        </label>
+                        <label style="font-size: 12px; color: #666;">
+                            <input type="radio" name="check_{i}" value="no" {checked_no}> No
+                        </label>
+                    </div>
+                </div>
+                <input type="text" name="notes_{i}" value="{escaped_notes}" 
+                       placeholder="Add notes..." 
+                       style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; font-family: inherit;">
+                <input type="hidden" name="name_{i}" value="{escaped_name}">
+            </div>
+            '''
+        
+        return self.render_template('review_view.html', 
+            checklist_content=checklist_html,
+            subscription_count=len(subscriptions)
+        )
 
     def _generate_notepad_markdown(self, subscriptions, other_notes):
         """Generate markdown content from notepad sections"""
@@ -1086,6 +1218,65 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             
         except Exception as e:
             print(f"Error saving notepad: {e}")
+            # Return error response
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            error_msg = json.dumps({"success": False, "error": str(e)})
+            self.wfile.write(error_msg.encode())
+
+    def handle_review_save(self):
+        """Handle saving review form data back to llm_notes.md"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            form_data = parse_qs(post_data)
+            
+            # Debug: Print received form data
+            print(f"DEBUG: Received form data: {form_data}")
+            
+            # Parse form data into subscription updates
+            subscription_updates = []
+            
+            # Group form data by subscription index
+            subscription_data = {}
+            for key, value in form_data.items():
+                if key.startswith(('check_', 'notes_', 'name_')):
+                    field_type, index = key.split('_', 1)
+                    if index not in subscription_data:
+                        subscription_data[index] = {}
+                    subscription_data[index][field_type] = value[0] if value else ''
+            
+            # Convert to update format
+            for index_data in subscription_data.values():
+                if 'name' in index_data:  # Ensure we have a name
+                    user_checked = None
+                    if 'check' in index_data:
+                        user_checked = True if index_data['check'] == 'yes' else False
+                    
+                    subscription_updates.append({
+                        'name': index_data['name'],
+                        'user_checked': user_checked,
+                        'user_notes': index_data.get('notes', '')
+                    })
+            
+            # Debug: Print subscription updates
+            print(f"DEBUG: Subscription updates: {subscription_updates}")
+            
+            # Update the markdown file
+            success = self.sm.update_llm_notes(subscription_updates)
+            
+            if success:
+                # Return success response
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"success": true}')
+            else:
+                raise Exception("Failed to update llm_notes.md file")
+                
+        except Exception as e:
+            print(f"Error saving review: {e}")
             # Return error response
             self.send_response(500)
             self.send_header('Content-type', 'application/json')

@@ -69,18 +69,10 @@
         const formData = new FormData(form);
         const params = new URLSearchParams();
         
-        // Debug: Log form elements
-        console.log('Form found:', form);
-        console.log('Form elements:', form.elements.length);
-        
         // Convert FormData to URLSearchParams (like notepad does)
         for (let [key, value] of formData.entries()) {
-            console.log(`Form data: ${key} = ${value}`);
             params.append(key, value);
         }
-        
-        // Debug: Log final params
-        console.log('Final params:', params.toString());
         
         const saveBtn = document.querySelector('button[onclick="saveReview()"]');
         const originalText = saveBtn.textContent;

@@ -1232,9 +1232,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length).decode('utf-8')
             form_data = parse_qs(post_data)
             
-            # Debug: Print received form data
-            print(f"DEBUG: Received form data: {form_data}")
-            
             # Parse form data into subscription updates
             subscription_updates = []
             
@@ -1259,9 +1256,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                         'user_checked': user_checked,
                         'user_notes': index_data.get('notes', '')
                     })
-            
-            # Debug: Print subscription updates
-            print(f"DEBUG: Subscription updates: {subscription_updates}")
             
             # Update the markdown file
             success = self.sm.update_llm_notes(subscription_updates)

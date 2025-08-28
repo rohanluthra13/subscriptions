@@ -1,27 +1,30 @@
-<!-- Paper container for notepad -->
-<div class="paper-container">
-    <div style="margin-bottom: 20px;">
-        <h2 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 600;">Notepad</h2>
-        <p style="color: #666; font-size: 12px; margin: 0;">Add notes about your subscriptions and other reminders. These will help guide the AI analysis.</p>
-    </div>
+<!-- Header positioned above paper container -->
+<div style="margin: 20px auto 0 auto; width: clamp(300px, 85%, 700px); padding-left: 0;">
+    <p style="color: #666; font-size: 12px; margin: 0;">notepad / add notes to give your LLM some context</p>
+</div>
 
-    <div style="height: 50vh; overflow-y: auto; margin-bottom: 20px;">
-        <form method="post" action="/save_notepad">
+<!-- Paper container for notepad -->
+<div class="paper-container" style="margin-top: 5px;">
+
+    <div style="height: 65vh; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column;">
+        <form method="post" action="/save_notepad" style="display: flex; flex-direction: column; flex: 1;">
             
             <div style="margin-bottom: 30px;">
-                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Subscriptions</h3>
+                <h3 style="font-size: 16px; font-weight: 400; margin: 0 0 12px 0; color: #333;">subscriptions</h3>
                 <div id="subscriptions-list" style="margin-bottom: 10px;">
                     {{subscription_items}}
                 </div>
-                <button type="button" class="add-note" onclick="addNote('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add subscription note</button>
+                <button type="button" class="add-note" onclick="addNote('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
             </div>
             
+            <div style="flex: 0.6;"></div> <!-- Spacer to position Other Notes -->
+            
             <div style="margin-bottom: 30px;">
-                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Other Notes</h3>
+                <h3 style="font-size: 16px; font-weight: 400; margin: 0 0 12px 0; color: #333;">other notes</h3>
                 <div id="other-notes-list" style="margin-bottom: 10px;">
                     {{other_notes_items}}
                 </div>
-                <button type="button" class="add-note" onclick="addNote('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add other note</button>
+                <button type="button" class="add-note" onclick="addNote('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
             </div>
             
         </form>
@@ -44,6 +47,7 @@
         padding: 40px;
         position: relative;
         transition: box-shadow 0.2s ease;
+        font-family: "SF Mono", monospace;
     }
     
     /* Subtle texture overlay */
@@ -66,7 +70,7 @@
         align-items: center; 
         margin-bottom: 6px; 
         padding: 6px 8px; 
-        background: #f8f9fa; 
+        background: white; 
         border-radius: 3px; 
         position: relative;
         z-index: 1;
@@ -74,7 +78,7 @@
     .note-item input { 
         flex: 1; 
         border: none; 
-        background: transparent; 
+        background: white; 
         font-family: inherit; 
         font-size: 12px; 
         padding: 0;
@@ -94,7 +98,7 @@
         noteItem.className = 'note-item';
         noteItem.innerHTML = `
             <span class="bullet">•</span>
-            <input type="text" name="${inputName}" placeholder="Enter note..." autofocus>
+            <input type="text" name="${inputName}" placeholder="enter note..." autofocus>
         `;
         
         list.appendChild(noteItem);

@@ -710,6 +710,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         if path == '/fetch':
             self.handle_metadata_fetch()
+        elif path == '/save_notepad':
+            self.handle_notepad_save()
         elif path == '/api/fetch':
             self.handle_api_fetch()
         elif path == '/api/fetch_email_content':
@@ -744,7 +746,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                             <button type="submit" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">fetch emails</button>
                         </form>
                     </div>
-                    <div style="color: #666; font-size: 14px; margin-top: 20px;">notepad</div>
+                    <a href="/?view=notepad" style="text-decoration: none;">
+                        <div style="color: #666; font-size: 14px; margin-top: 20px; cursor: pointer;">notepad</div>
+                    </a>
                 </div>
                 <div style="text-align: right;">
                     <div style="color: #666; font-size: 14px; margin-bottom: 10px;">connected:</div>
@@ -779,6 +783,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         if view == 'emails':
             return self.render_emails_view()
+        elif view == 'notepad':
+            return self.render_notepad_view()
         else:
             return self.render_subscriptions_view()
     
@@ -965,6 +971,93 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             subscription_rows=subscription_rows
         )
 
+    def _parse_notepad_content(self):
+        """Parse notepad markdown content into structured data"""
+        subscriptions = []
+        other_notes = []
+        
+        try:
+            with open('resources/notepad.md', 'r') as f:
+                content = f.read()
+                
+            current_section = None
+            for line in content.split('\n'):
+                line = line.strip()
+                if line == '## Subscriptions':
+                    current_section = 'subscriptions'
+                elif line == '## Other Notes':
+                    current_section = 'other_notes'
+                elif line.startswith('- ') and current_section:
+                    item = line[2:]  # Remove '- ' prefix
+                    if current_section == 'subscriptions':
+                        subscriptions.append(item)
+                    elif current_section == 'other_notes':
+                        other_notes.append(item)
+        except FileNotFoundError:
+            # File doesn't exist yet, return empty lists
+            pass
+        
+        return subscriptions, other_notes
+
+    def _generate_notepad_items_html(self, notes, input_name):
+        """Generate HTML for notepad items with proper escaping"""
+        import html
+        items = []
+        for note in notes:
+            items.append(f'''
+                <div class="note-item">
+                    <span class="bullet">•</span>
+                    <input type="text" name="{input_name}" value="{html.escape(note)}" />
+                </div>''')
+        return ''.join(items)
+
+    def render_notepad_view(self):
+        """Render notepad view for right panel"""
+        subscriptions, other_notes = self._parse_notepad_content()
+        
+        subscription_items = self._generate_notepad_items_html(subscriptions, 'subscriptions')
+        other_notes_items = self._generate_notepad_items_html(other_notes, 'other_notes')
+        
+        return self.render_template('notepad_view.html', 
+            subscription_items=subscription_items,
+            other_notes_items=other_notes_items
+        )
+
+    def _generate_notepad_markdown(self, subscriptions, other_notes):
+        """Generate markdown content from notepad sections"""
+        lines = ["## Subscriptions"]
+        for note in subscriptions:
+            if note.strip():  # Only add non-empty notes
+                lines.append(f"- {note}")
+        
+        lines.extend(["", "## Other Notes"])
+        for note in other_notes:
+            if note.strip():  # Only add non-empty notes
+                lines.append(f"- {note}")
+        
+        return '\n'.join(lines) + '\n'
+
+    def handle_notepad_save(self):
+        """Handle saving notepad content"""
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length).decode('utf-8')
+        form_data = parse_qs(post_data)
+        
+        # Extract and clean form data
+        subscriptions = form_data.get('subscriptions', [])
+        other_notes = form_data.get('other_notes', [])
+        
+        # Generate and save markdown content
+        content = self._generate_notepad_markdown(subscriptions, other_notes)
+        
+        with open('resources/notepad.md', 'w') as f:
+            f.write(content)
+        
+        # Return success response for AJAX
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(b'{"success": true}')
 
     def start_gmail_auth(self):
         """Redirect to Gmail OAuth"""

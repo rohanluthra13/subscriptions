@@ -1,0 +1,98 @@
+<div style="margin-bottom: 20px; padding: 15px;">
+    <h2 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">Notepad</h2>
+    <p style="color: #666; font-size: 12px; margin-bottom: 20px;">Add notes about your subscriptions and other reminders. These will help guide the AI analysis.</p>
+</div>
+
+<div style="height: 65vh; overflow-y: auto; padding: 0 15px;">
+    <form method="post" action="/save_notepad">
+        
+        <div style="margin-bottom: 30px;">
+            <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Subscriptions</h3>
+            <div id="subscriptions-list" style="margin-bottom: 10px;">
+                {{subscription_items}}
+            </div>
+            <button type="button" class="add-note" onclick="addNote('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add subscription note</button>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+            <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #333;">Other Notes</h3>
+            <div id="other-notes-list" style="margin-bottom: 10px;">
+                {{other_notes_items}}
+            </div>
+            <button type="button" class="add-note" onclick="addNote('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0;">+ add other note</button>
+        </div>
+        
+    </form>
+</div>
+
+<div style="margin-top: 15px; text-align: center; padding: 10px; border-top: 1px solid #eee;">
+    <button type="button" onclick="saveNotepad()" style="background: #007bff; color: white; border: none; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; margin-right: 8px;">save</button>
+    <a href="/" style="text-decoration: none;"><button type="button" style="background: white; color: #666; border: 1px solid #ddd; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit;">cancel</button></a>
+</div>
+
+<style>
+    .note-item { 
+        display: flex; 
+        align-items: center; 
+        margin-bottom: 6px; 
+        padding: 6px 8px; 
+        background: #f8f9fa; 
+        border-radius: 3px; 
+    }
+    .note-item input { 
+        flex: 1; 
+        border: none; 
+        background: transparent; 
+        font-family: inherit; 
+        font-size: 12px; 
+        padding: 0;
+    }
+    .note-item input:focus { outline: none; }
+    .bullet { color: #666; margin-right: 6px; font-size: 12px; }
+    .add-note:hover { color: #333; }
+</style>
+
+<script>
+    function addNote(section) {
+        const listId = section + '-list';
+        const inputName = section === 'subscriptions' ? 'subscriptions' : 'other_notes';
+        const list = document.getElementById(listId);
+        
+        const noteItem = document.createElement('div');
+        noteItem.className = 'note-item';
+        noteItem.innerHTML = `
+            <span class="bullet">•</span>
+            <input type="text" name="${inputName}" placeholder="Enter note..." autofocus>
+        `;
+        
+        list.appendChild(noteItem);
+        
+        // Focus the new input
+        const newInput = noteItem.querySelector('input');
+        newInput.focus();
+    }
+    
+    function saveNotepad() {
+        const form = document.querySelector('form');
+        // Convert form data to POST request
+        const formData = new FormData(form);
+        
+        fetch('/save_notepad', {
+            method: 'POST',
+            body: formData
+        }).then(response => {
+            if (response.ok) {
+                // Reload the current view
+                window.location.reload();
+            }
+        });
+    }
+    
+    // Add initial empty inputs if no existing notes
+    if (document.querySelectorAll('#subscriptions-list .note-item').length === 0) {
+        addNote('subscriptions');
+    }
+    if (document.querySelectorAll('#other-notes-list .note-item').length === 0) {
+        addNote('other-notes');
+    }
+</script>

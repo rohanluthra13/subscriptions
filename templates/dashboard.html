@@ -42,6 +42,17 @@
             color: #000;
         }
         
+        /* Clickable section titles */
+        a.section-title-link {
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+        }
+        
+        a.section-title-link:hover {
+            opacity: 0.7;
+        }
+        
         /* Right side of each section (content/actions) */
         .section-content { 
             padding-right: 30px;
@@ -79,44 +90,31 @@
     <div class="container">
         <div class="left-panel">
             <div class="section">
-                <div class="section-title">subscriptions</div>
+                <a href="/" class="section-title-link">
+                    <div class="section-title">subscriptions</div>
+                </a>
             </div>
             
             <div class="section">
-                <div class="section-title">connect email</div>
+                <a href="/?view=emails" class="section-title-link">
+                    <div class="section-title">email connection</div>
+                </a>
                 <div class="section-content" style="{{connection_style}}">
                     {{connection_content}}
                 </div>
             </div>
             
             <div class="section">
-                <div class="section-title">check emails</div>
+                <div class="section-title">user info</div>
                 <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
-                    <div style="text-align: right; padding-top: 10px;">
-                        <form action="/fetch" method="post" style="display: inline;">
-                            <button type="submit" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">fetch emails</button>
-                        </form>
-                    </div>
-                    {{fetch_status_content}}
+                    <!-- Empty for now - will be user information -->
                 </div>
             </div>
             
             <div class="section">
-                <div class="section-title">view data</div>
+                <div class="section-title">LLM notes</div>
                 <div class="section-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
-                    <div style="text-align: right; padding-top: 10px;">
-                        <a href="/?view=emails" style="text-decoration: none;">
-                            <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">view emails</button>
-                        </a>
-                        <span style="margin: 0 10px;"></span>
-                        <a href="/reset" style="text-decoration: none;">
-                            <button onclick="return confirm('Delete all data?')" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">reset</button>
-                        </a>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails stored:</div>
-                        <div style="color: #008000; font-size: 14px;">{{email_count}}</div>
-                    </div>
+                    <!-- Empty for now - will be scratchpad/checkpoint -->
                 </div>
             </div>
         </div>

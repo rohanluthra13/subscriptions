@@ -736,12 +736,15 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             connection_style = "display: flex; flex-direction: column; justify-content: space-between; height: 100%;"
             connection_content = f'''
                 <div style="text-align: right; padding-top: 10px;">
-                    <a href="/auth/gmail" style="text-decoration: none;">
+                    <a href="/auth/gmail" style="text-decoration: none; margin-right: 15px;">
                         <button style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">change email</button>
                     </a>
+                    <form action="/fetch" method="post" style="display: inline;">
+                        <button type="submit" style="border: none; background: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; font-family: 'SF Mono', monospace;">fetch emails</button>
+                    </form>
                 </div>
                 <div style="text-align: right;">
-                    <div style="color: #666; font-size: 14px; margin-bottom: 30px;">emails connected:</div>
+                    <div style="color: #666; font-size: 14px; margin-bottom: 10px;">connected:</div>
                     <div class="status" style="color: #008000;">{connections[0]["email"]}</div>
                 </div>
                 '''
@@ -755,24 +758,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 </div>
                 '''
         
-        # Prepare fetch status content
-        if connected:
-            fetch_status_content = f'''
-                <div style="text-align: right;">
-                    {f'<div style="color: #008000; font-size: 14px; margin-bottom: 15px;">{fetch_results}</div>' if fetch_results else ''}
-                    <div style="color: #666; font-size: 14px; margin-bottom: 30px;">last fetched:</div>
-                    <div style="color: #008000; font-size: 14px;">{self.format_datetime_nz(connections[0]["last_sync_at"]) if connections[0]["last_sync_at"] else "never"}</div>
-                </div>
-                '''
-        else:
-            fetch_status_content = ""
-        
         # Render template
         html = self.render_template('dashboard.html',
             connection_style=connection_style,
             connection_content=connection_content,
-            fetch_status_content=fetch_status_content,
-            email_count=email_count,
             right_panel_content=self.render_right_panel(params)
         )
         

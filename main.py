@@ -133,15 +133,6 @@ class SubscriptionManager:
             )
         ''')
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS scratchpad (
-                id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-                item TEXT NOT NULL,
-                processed BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
         
         # Create indexes for better query performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_gmail_message_id ON processed_emails(gmail_message_id)')

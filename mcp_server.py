@@ -28,7 +28,7 @@ def analyze_email_metadata() -> list[base.Message]:
     This prompt guides the LLM to:
     1. Retrieve existing subscriptions and email metadata
     2. Analyze patterns to identify subscription services
-    3. Write findings to the scratchpad
+    3. Write findings to resources/llm_notes.md
     """
     prompt = """You are analyzing email metadata to identify subscription services.
 
@@ -48,12 +48,16 @@ Analysis approach:
 - Focus on domains NOT already in the subscriptions table
 
 Final output:
-After processing all emails, call add_scratchpad_item() for each discovered subscription:
-```
-Likely subscription service: [Service Name]
+After processing all emails, append your findings to resources/llm_notes.md in this format:
+
+**[Service Name]**
 Domains: [domain1.com, domain2.com] 
 Notes: [Evidence across all batches, e.g. "12 monthly billing emails", "renewal notices every 30 days"]
-```
+
+User Check: [ ] Yes | [ ] No
+User Notes: 
+
+Add each discovered subscription as a new block at the end of the "## Discovered Subscriptions" section.
 
 The system handles batching automatically - just keep calling get_email_metadata() until done."""
     
@@ -375,11 +379,9 @@ def fetch_email_metadata(quick_sync: bool = True) -> str:
         # Check if app is running
         app_url = "http://localhost:8000"
         
-        # Try to reach the app with debugging
+        # Try to reach the app
         try:
-            print(f"DEBUG: Attempting to connect to {app_url}/status", file=sys.stderr)
             status_response = requests.get(f"{app_url}/status", timeout=5)
-            print(f"DEBUG: Got response {status_response.status_code}", file=sys.stderr)
             if status_response.status_code != 200:
                 return json.dumps({
                     "success": False,
@@ -387,7 +389,6 @@ def fetch_email_metadata(quick_sync: bool = True) -> str:
                     "hint": "Check if main.py is running correctly"
                 })
         except requests.exceptions.RequestException as e:
-            print(f"DEBUG: Request failed with exception: {type(e).__name__}: {str(e)}", file=sys.stderr)
             return json.dumps({
                 "success": False,
                 "error": f"Cannot connect to app: {type(e).__name__}: {str(e)}",
@@ -808,90 +809,6 @@ def get_email_metadata(
         return json.dumps({"success": False, "error": str(e)})
 
 @mcp.tool()
-def get_scratchpad_items() -> str:
-    """Get all scratchpad items for review
-    
-    Returns all items from the scratchpad table, ordered by creation date (newest first).
-    """
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, item, processed, created_at 
-            FROM scratchpad 
-            ORDER BY created_at DESC
-        """)
-        items = cursor.fetchall()
-        conn.close()
-        
-        if not items:
-            return json.dumps({
-                "success": True,
-                "message": "No scratchpad items found",
-                "count": 0,
-                "items": []
-            }, indent=2)
-        
-        # Format results
-        result_items = []
-        for item_data in items:
-            item_id, item_text, processed, created_at = item_data
-            
-            result_items.append({
-                "id": item_id,
-                "item": item_text,
-                "processed": bool(processed),
-                "created_at": created_at
-            })
-        
-        return json.dumps({
-            "success": True,
-            "message": f"Found {len(items)} scratchpad items",
-            "count": len(items),
-            "items": result_items
-        }, indent=2)
-        
-    except Exception as e:
-        print(f"Error in get_scratchpad_items: {e}", file=sys.stderr)
-        return json.dumps({"success": False, "error": str(e)})
-
-@mcp.tool()
-def add_scratchpad_item(item: str) -> str:
-    """Add a new item to the scratchpad
-    
-    Args:
-        item: The text content to add to the scratchpad
-    """
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Insert new scratchpad item
-        cursor.execute("""
-            INSERT INTO scratchpad (item, processed, created_at) 
-            VALUES (?, 0, datetime('now'))
-        """, (item,))
-        
-        conn.commit()
-        item_id = cursor.lastrowid
-        conn.close()
-        
-        return json.dumps({
-            "success": True,
-            "message": "Added scratchpad item",
-            "item": {
-                "id": item_id,
-                "item": item,
-                "processed": False
-            }
-        }, indent=2)
-        
-    except Exception as e:
-        print(f"Error in add_scratchpad_item: {e}", file=sys.stderr)
-        return json.dumps({"success": False, "error": str(e)})
-
-@mcp.tool()
 def mark_emails_analyzed(email_ids: list[int]) -> str:
     """Mark emails as analyzed for subscription detection
     
@@ -926,80 +843,6 @@ def mark_emails_analyzed(email_ids: list[int]) -> str:
         
     except Exception as e:
         print(f"Error in mark_emails_analyzed: {e}", file=sys.stderr)
-        return json.dumps({"success": False, "error": str(e)})
-
-
-@mcp.tool()
-def update_scratchpad_item(item_id: int, item: Optional[str] = None, processed: Optional[bool] = None) -> str:
-    """Update an existing scratchpad item
-    
-    Args:
-        item_id: The integer ID of the scratchpad item to update
-        item: New text content (optional)
-        processed: New processed status (optional)
-    """
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check if item exists
-        cursor.execute("SELECT id FROM scratchpad WHERE id = ?", (item_id,))
-        if not cursor.fetchone():
-            conn.close()
-            return json.dumps({
-                "success": False,
-                "error": f"No scratchpad item found with ID '{item_id}'"
-            })
-        
-        # Build update query dynamically
-        updates = []
-        params = []
-        
-        if item is not None:
-            updates.append("item = ?")
-            params.append(item)
-            
-        if processed is not None:
-            updates.append("processed = ?")
-            params.append(1 if processed else 0)
-            
-        if not updates:
-            conn.close()
-            return json.dumps({
-                "success": False,
-                "error": "No fields to update"
-            })
-        
-        # Execute update
-        params.append(item_id)
-        query = f"UPDATE scratchpad SET {', '.join(updates)} WHERE id = ?"
-        cursor.execute(query, params)
-        
-        conn.commit()
-        
-        # Get updated item
-        cursor.execute(
-            "SELECT id, item, processed, created_at FROM scratchpad WHERE id = ?",
-            (item_id,)
-        )
-        updated = cursor.fetchone()
-        conn.close()
-        
-        updated_id, updated_item, updated_processed, created_at = updated
-        
-        return json.dumps({
-            "success": True,
-            "message": f"Updated scratchpad item {item_id}",
-            "item": {
-                "id": updated_id,
-                "item": updated_item,
-                "processed": bool(updated_processed),
-                "created_at": created_at
-            }
-        }, indent=2)
-        
-    except Exception as e:
-        print(f"Error in update_scratchpad_item: {e}", file=sys.stderr)
         return json.dumps({"success": False, "error": str(e)})
 
 if __name__ == "__main__":

@@ -72,8 +72,8 @@ OPENAI_MODEL=gpt-4o-mini
 
 1. **Gmail Connection**: OAuth flow to access email metadata
 2. **Domain Clustering**: Groups emails by sender domain 
-3. **Manual Classification**: User marks domains as subscriptions/not subscriptions
-4. **Subscription Detection**: Identifies subscription patterns and costs
+3. **LLM Analysis**: AI analyzes patterns and writes findings to `resources/llm_notes.md`
+4. **User Review**: Interactive UI at `/?view=review` for confirming/rejecting findings
 5. **Local Storage**: All data stays in local SQLite database
 
 ## Development Notes
@@ -89,7 +89,12 @@ OPENAI_MODEL=gpt-4o-mini
 - `connections` - Gmail OAuth tokens
 - `processed_emails` - Email metadata and sender domains
 - `subscriptions` - Detected subscription details
-- `scratchpad` - Manual subscription entry items
+
+## Review Workflow
+
+- LLM findings stored in `resources/llm_notes.md`
+- Review UI at `/?view=review` for user confirmation
+- Markdown format with User Check (Yes/No) and User Notes fields
 
 ## MCP Migration (Future)
 

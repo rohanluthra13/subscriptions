@@ -8,9 +8,9 @@
 
     <!-- Filter header buttons -->
     <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e0e0e0;">
-        <button type="button" id="first-btn" onclick="toggleFilter()" style="border: none; background: none; color: #333; cursor: pointer; font-size: 15px; font-family: inherit; padding: 0; font-weight: 500;">to do</button>
+        <button type="button" id="todo-btn" onclick="showToDo()" style="border: none; background: none; color: #333; cursor: pointer; font-size: 15px; font-family: inherit; padding: 0; font-weight: 500;">to do</button>
         <span style="color: #666; margin: 0 8px; font-size: 14px;">/</span>
-        <button type="button" id="second-btn" onclick="toggleFilter()" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">done</button>
+        <button type="button" id="done-btn" onclick="showDone()" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">done</button>
     </div>
 
     <form id="review-form" method="post" action="/save_review" style="height: 60vh; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column;">
@@ -70,7 +70,7 @@
     }
     
     /* Filter button hover effects */
-    #first-btn:hover, #second-btn:hover {
+    #todo-btn:hover, #done-btn:hover {
         color: #333 !important;
     }
 </style>
@@ -78,36 +78,36 @@
 <script>
     let currentFilter = 'todo'; // Default to showing to-do items
     
-    function toggleFilter() {
-        currentFilter = currentFilter === 'todo' ? 'done' : 'todo';
-        updateButtonLayout();
+    function showToDo() {
+        currentFilter = 'todo';
+        updateButtonStyles();
         filterItems();
     }
     
-    function updateButtonLayout() {
-        const firstBtn = document.getElementById('first-btn');
-        const secondBtn = document.getElementById('second-btn');
+    function showDone() {
+        currentFilter = 'done';
+        updateButtonStyles();
+        filterItems();
+    }
+    
+    function updateButtonStyles() {
+        const todoBtn = document.getElementById('todo-btn');
+        const doneBtn = document.getElementById('done-btn');
         
         if (currentFilter === 'todo') {
-            // "to do / done" layout
-            firstBtn.textContent = 'to do';
-            firstBtn.style.color = '#333';
-            firstBtn.style.fontWeight = '500';
-            firstBtn.style.fontSize = '15px';
-            secondBtn.textContent = 'done';
-            secondBtn.style.color = '#666';
-            secondBtn.style.fontWeight = 'normal';
-            secondBtn.style.fontSize = '14px';
+            todoBtn.style.color = '#333';
+            todoBtn.style.fontWeight = '500';
+            todoBtn.style.fontSize = '15px';
+            doneBtn.style.color = '#666';
+            doneBtn.style.fontWeight = 'normal';
+            doneBtn.style.fontSize = '14px';
         } else {
-            // "done / to do" layout  
-            firstBtn.textContent = 'done';
-            firstBtn.style.color = '#333';
-            firstBtn.style.fontWeight = '500';
-            firstBtn.style.fontSize = '15px';
-            secondBtn.textContent = 'to do';
-            secondBtn.style.color = '#666';
-            secondBtn.style.fontWeight = 'normal';
-            secondBtn.style.fontSize = '14px';
+            todoBtn.style.color = '#666';
+            todoBtn.style.fontWeight = 'normal';
+            todoBtn.style.fontSize = '14px';
+            doneBtn.style.color = '#333';
+            doneBtn.style.fontWeight = '500';
+            doneBtn.style.fontSize = '15px';
         }
     }
     
@@ -144,21 +144,24 @@
     function toggleNotes(index) {
         const btn = document.getElementById(`add-note-btn-${index}`);
         const input = document.getElementById(`notes-input-${index}`);
+        const display = document.getElementById(`notes-display-${index}`);
+        const wrapper = document.getElementById(`notes-input-wrapper-${index}`);
         
         if (btn.style.display === 'none') {
             // Already showing input, don't hide it
             input.focus();
         } else {
-            // Show input, hide button
+            // Show input wrapper, hide button and display
             btn.style.display = 'none';
-            input.style.display = 'block';
+            if (display) display.style.display = 'none';
+            if (wrapper) wrapper.style.display = 'flex';
             input.focus();
         }
     }
     
     // Initialize the view when page loads
     document.addEventListener('DOMContentLoaded', function() {
-        updateButtonLayout();
+        updateButtonStyles();
         filterItems();
     });
     

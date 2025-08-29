@@ -1149,9 +1149,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             is_completed = 'true' if sub['user_checked'] is not None else 'false'
             
             checklist_html += f'''
-            <div class="subscription-item" data-completed="{is_completed}" style="margin-bottom: 20px; padding: 15px;">
+            <div class="subscription-item" data-completed="{is_completed}" style="margin-bottom: 0; padding: 15px; border-bottom: 1px solid #e0e0e0;">
                 <div style="display: grid; grid-template-columns: 40% 60%; align-items: center; margin-bottom: 10px;">
-                    <span style="font-size: 13px; font-weight: 400; color: #333;">{escaped_name}</span>
+                    <span style="font-size: 12px; font-weight: 400; color: #333;">{escaped_name}</span>
                     <div style="display: flex; gap: 15px;">
                         <label style="font-size: 12px; color: #666;">
                             <input type="radio" name="check_{i}" value="yes" {checked_yes}> Yes
@@ -1164,9 +1164,14 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 <div style="margin-top: 8px;">
                     <button type="button" id="add-note-btn-{i}" onclick="toggleNotes({i})" 
                             style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0; display: {plus_visible};">+</button>
-                    <input type="text" id="notes-input-{i}" name="notes_{i}" value="{escaped_notes}" 
-                           placeholder="Add notes..." 
-                           style="width: 100%; padding: 6px; border: none; font-size: 12px; font-family: inherit; display: {notes_visible};">
+                    <div id="notes-display-{i}" style="font-size: 12px; color: #666; font-style: italic; display: {'block' if escaped_notes else 'none'};">
+                        <span style="color: #666;">notes: </span>{escaped_notes}
+                    </div>
+                    <div id="notes-input-wrapper-{i}" style="display: none; align-items: baseline;">
+                        <span style="font-size: 12px; color: #666; font-style: italic;">notes: </span><input type="text" id="notes-input-{i}" name="notes_{i}" value="{escaped_notes}" 
+                               placeholder="" 
+                               style="border: none; font-size: 12px; font-family: inherit; color: #666; font-style: italic; background: transparent; outline: none; flex: 1;">
+                    </div>
                 </div>
                 <input type="hidden" name="name_{i}" value="{escaped_name}">
             </div>

@@ -876,6 +876,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             return self.render_notepad_view()
         elif view == 'review':
             return self.render_review_view()
+        elif view == 'manage':
+            return self.render_manage_view()
         else:
             return self.render_subscriptions_view()
     
@@ -1181,6 +1183,11 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             checklist_content=checklist_html,
             subscription_count=len(subscriptions)
         )
+    
+    def render_manage_view(self):
+        """Render manage subscriptions view for right panel"""
+        # For now, just render the empty template
+        return self.render_template('manage_view.html')
 
     def _generate_notepad_markdown(self, subscriptions, other_notes):
         """Generate markdown content from notepad sections"""

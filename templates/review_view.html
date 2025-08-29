@@ -6,7 +6,14 @@
 <!-- Paper container for review -->
 <div class="paper-container" style="margin-top: 5px;">
 
-    <form id="review-form" method="post" action="/save_review" style="height: 65vh; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column;">
+    <!-- Filter header buttons -->
+    <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e0e0e0;">
+        <button type="button" id="first-btn" onclick="toggleFilter()" style="border: none; background: none; color: #333; cursor: pointer; font-size: 15px; font-family: inherit; padding: 0; font-weight: 500;">to do</button>
+        <span style="color: #666; margin: 0 8px; font-size: 14px;">/</span>
+        <button type="button" id="second-btn" onclick="toggleFilter()" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">done</button>
+    </div>
+
+    <form id="review-form" method="post" action="/save_review" style="height: 60vh; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column;">
         <div id="review-content" style="flex: 1;">
             {{checklist_content}}
         </div>
@@ -57,13 +64,104 @@
         line-height: 1.6;
     }
     
-    /* Subscription item hover effect */
-    .subscription-item:hover {
-        background: #f9f9f9;
+    /* Add note button hover effect */
+    button[id^="add-note-btn-"]:hover {
+        color: #333 !important;
+    }
+    
+    /* Filter button hover effects */
+    #first-btn:hover, #second-btn:hover {
+        color: #333 !important;
     }
 </style>
 
 <script>
+    let currentFilter = 'todo'; // Default to showing to-do items
+    
+    function toggleFilter() {
+        currentFilter = currentFilter === 'todo' ? 'done' : 'todo';
+        updateButtonLayout();
+        filterItems();
+    }
+    
+    function updateButtonLayout() {
+        const firstBtn = document.getElementById('first-btn');
+        const secondBtn = document.getElementById('second-btn');
+        
+        if (currentFilter === 'todo') {
+            // "to do / done" layout
+            firstBtn.textContent = 'to do';
+            firstBtn.style.color = '#333';
+            firstBtn.style.fontWeight = '500';
+            firstBtn.style.fontSize = '15px';
+            secondBtn.textContent = 'done';
+            secondBtn.style.color = '#666';
+            secondBtn.style.fontWeight = 'normal';
+            secondBtn.style.fontSize = '14px';
+        } else {
+            // "done / to do" layout  
+            firstBtn.textContent = 'done';
+            firstBtn.style.color = '#333';
+            firstBtn.style.fontWeight = '500';
+            firstBtn.style.fontSize = '15px';
+            secondBtn.textContent = 'to do';
+            secondBtn.style.color = '#666';
+            secondBtn.style.fontWeight = 'normal';
+            secondBtn.style.fontSize = '14px';
+        }
+    }
+    
+    function filterItems() {
+        const items = document.querySelectorAll('.subscription-item');
+        
+        items.forEach(item => {
+            const isCompleted = item.getAttribute('data-completed') === 'true';
+            
+            if (currentFilter === 'todo' && !isCompleted) {
+                item.style.display = 'block';
+            } else if (currentFilter === 'done' && isCompleted) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+    
+    function updateItemCompletionStatus() {
+        const items = document.querySelectorAll('.subscription-item');
+        
+        items.forEach(item => {
+            // Find radio buttons within this item
+            const yesRadio = item.querySelector('input[type="radio"][value="yes"]');
+            const noRadio = item.querySelector('input[type="radio"][value="no"]');
+            
+            // Update data-completed attribute based on current radio button state
+            const isCompleted = yesRadio.checked || noRadio.checked;
+            item.setAttribute('data-completed', isCompleted ? 'true' : 'false');
+        });
+    }
+    
+    function toggleNotes(index) {
+        const btn = document.getElementById(`add-note-btn-${index}`);
+        const input = document.getElementById(`notes-input-${index}`);
+        
+        if (btn.style.display === 'none') {
+            // Already showing input, don't hide it
+            input.focus();
+        } else {
+            // Show input, hide button
+            btn.style.display = 'none';
+            input.style.display = 'block';
+            input.focus();
+        }
+    }
+    
+    // Initialize the view when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        updateButtonLayout();
+        filterItems();
+    });
+    
     function saveReview() {
         const form = document.getElementById('review-form');
         const formData = new FormData(form);
@@ -89,6 +187,10 @@
         .then(response => {
             if (response.ok) {
                 saveBtn.textContent = 'saved!';
+                // Update item completion status based on current form state
+                updateItemCompletionStatus();
+                // Re-filter items after save
+                filterItems();
                 setTimeout(() => {
                     saveBtn.textContent = originalText;
                     saveBtn.disabled = false;

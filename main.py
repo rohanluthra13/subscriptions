@@ -1141,10 +1141,17 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             escaped_name = sub['name'].replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
             escaped_notes = sub['user_notes'].replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
             
+            # Determine if notes should be visible (if there's existing content)
+            notes_visible = 'block' if escaped_notes else 'none'
+            plus_visible = 'inline' if not escaped_notes else 'none'
+            
+            # Determine completion status for filtering
+            is_completed = 'true' if sub['user_checked'] is not None else 'false'
+            
             checklist_html += f'''
-            <div class="subscription-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 4px;">
-                <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                    <strong style="flex: 1; font-size: 14px;">{escaped_name}</strong>
+            <div class="subscription-item" data-completed="{is_completed}" style="margin-bottom: 20px; padding: 15px;">
+                <div style="display: grid; grid-template-columns: 40% 60%; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 13px; font-weight: 400; color: #333;">{escaped_name}</span>
                     <div style="display: flex; gap: 15px;">
                         <label style="font-size: 12px; color: #666;">
                             <input type="radio" name="check_{i}" value="yes" {checked_yes}> Yes
@@ -1154,9 +1161,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                         </label>
                     </div>
                 </div>
-                <input type="text" name="notes_{i}" value="{escaped_notes}" 
-                       placeholder="Add notes..." 
-                       style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; font-family: inherit;">
+                <div style="margin-top: 8px;">
+                    <button type="button" id="add-note-btn-{i}" onclick="toggleNotes({i})" 
+                            style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0; display: {plus_visible};">+</button>
+                    <input type="text" id="notes-input-{i}" name="notes_{i}" value="{escaped_notes}" 
+                           placeholder="Add notes..." 
+                           style="width: 100%; padding: 6px; border: none; font-size: 12px; font-family: inherit; display: {notes_visible};">
+                </div>
                 <input type="hidden" name="name_{i}" value="{escaped_name}">
             </div>
             '''

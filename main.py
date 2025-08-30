@@ -1194,6 +1194,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             # Generate row with editable fields
             subscription_rows += f"""<tr data-subscription-id="{sub.get('id', '')}">
                 <td class="editable-cell" contenteditable="true" data-field="name">{sub['name']}</td>
+                <td class="editable-cell" contenteditable="true" data-field="category">{sub.get('category', '') or ''}</td>
                 <td class="editable-cell" contenteditable="true" data-field="status">{sub.get('status', '') or ''}</td>
                 <td>
                     <select name="auto_renewing" class="editable-select">
@@ -1211,7 +1212,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         # Add the "add new" row at the bottom
         subscription_rows += """
             <tr class="add-row">
-                <td colspan="6">
+                <td colspan="7">
                     <button class="add-btn">+</button>
                 </td>
             </tr>

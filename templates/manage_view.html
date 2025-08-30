@@ -5,7 +5,8 @@
         <table id="manage-table" style="width: 100%; border-collapse: collapse;">
             <thead>
                 <tr style="border-bottom: 2px solid #e0e0e0;">
-                    <th style="text-align: left; padding: 10px; font-weight: 600;">Name</th>
+                    <th style="text-align: left; padding: 10px; font-weight: 600; width: 20%;">Name</th>
+                    <th style="text-align: left; padding: 10px; font-weight: 600;">Category</th>
                     <th style="text-align: left; padding: 10px; font-weight: 600;">Status</th>
                     <th style="text-align: left; padding: 10px; font-weight: 600;">Renewing</th>
                     <th style="text-align: left; padding: 10px; font-weight: 600;">Cost</th>
@@ -147,6 +148,7 @@
         const data = {
             id: subscriptionId,
             name: row.querySelector('[data-field="name"]').textContent.trim(),
+            category: row.querySelector('[data-field="category"]').textContent.trim(),
             status: row.querySelector('[data-field="status"]').textContent.trim(),
             auto_renewing: row.querySelector('[name="auto_renewing"]').value,
             cost: row.querySelector('[data-field="cost"]').textContent.trim(),
@@ -165,6 +167,7 @@
         
         newRow.innerHTML = `
             <td class="editable-cell" contenteditable="true" data-field="name" data-placeholder="Enter name..."></td>
+            <td class="editable-cell" contenteditable="true" data-field="category" data-placeholder="streaming"></td>
             <td class="editable-cell" contenteditable="true" data-field="status" data-placeholder="active"></td>
             <td>
                 <select name="auto_renewing" class="editable-select">

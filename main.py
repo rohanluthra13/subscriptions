@@ -228,6 +228,9 @@ class SubscriptionManager:
 
     def refresh_access_token(self, refresh_token: str):
         """Refresh expired access token"""
+        if not refresh_token or refresh_token.strip() == '':
+            raise Exception("No valid refresh token available")
+            
         data = {
             'client_id': self.google_client_id,
             'client_secret': self.google_client_secret,
@@ -237,7 +240,19 @@ class SubscriptionManager:
         }
         
         response = requests.post('https://oauth2.googleapis.com/token', data=data)
+        
+        if not response.ok:
+            error_detail = response.text
+            print(f"Token refresh failed: HTTP {response.status_code} - {error_detail}")
+            raise Exception(f"Token refresh failed: {response.status_code} - {error_detail}")
+        
         token_data = response.json()
+        
+        if 'error' in token_data:
+            error_msg = token_data.get('error_description', token_data['error'])
+            print(f"Token refresh error: {error_msg}")
+            raise Exception(f"Token refresh error: {error_msg}")
+            
         return token_data
 
     def get_valid_access_token(self, email: str) -> str:
@@ -256,25 +271,43 @@ class SubscriptionManager:
             raise Exception("Connection not found")
             
         access_token, refresh_token, token_expiry = result
-        expiry_time = datetime.fromisoformat(token_expiry.replace('Z', '+00:00'))
+        
+        # Handle timezone conversion more robustly
+        try:
+            if token_expiry.endswith('Z'):
+                expiry_time = datetime.fromisoformat(token_expiry.replace('Z', '+00:00'))
+            elif '+00:00' in token_expiry or 'T' in token_expiry:
+                expiry_time = datetime.fromisoformat(token_expiry)
+            else:
+                # Fallback for simple ISO format
+                expiry_time = datetime.fromisoformat(token_expiry)
+        except ValueError as e:
+            conn.close()
+            raise Exception(f"Invalid token expiry format: {token_expiry} - {str(e)}")
         
         # If token expires within 5 minutes, refresh it
         if expiry_time <= datetime.now() + timedelta(minutes=5):
             print("Refreshing access token...")
-            token_data = self.refresh_access_token(refresh_token)
-            
-            if 'access_token' in token_data:
-                new_expiry = datetime.now() + timedelta(seconds=token_data['expires_in'])
-                cursor.execute('''
-                    UPDATE connections 
-                    SET access_token = ?, token_expiry = ?
-                    WHERE email = ?
-                ''', (token_data['access_token'], new_expiry.isoformat(), email))
-                conn.commit()
-                access_token = token_data['access_token']
-            else:
+            try:
+                token_data = self.refresh_access_token(refresh_token)
+                
+                if 'access_token' in token_data:
+                    new_expiry = datetime.now() + timedelta(seconds=token_data['expires_in'])
+                    cursor.execute('''
+                        UPDATE connections 
+                        SET access_token = ?, token_expiry = ?
+                        WHERE email = ?
+                    ''', (token_data['access_token'], new_expiry.isoformat(), email))
+                    conn.commit()
+                    access_token = token_data['access_token']
+                    print("Access token refreshed successfully")
+                else:
+                    conn.close()
+                    raise Exception("Failed to refresh token - no access_token in response")
+            except Exception as e:
                 conn.close()
-                raise Exception("Failed to refresh token")
+                print(f"Token refresh failed for {email}: {str(e)}")
+                raise Exception(f"Token refresh failed: {str(e)}. Please re-authenticate.")
         
         conn.close()
         return access_token
@@ -1358,6 +1391,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         expiry_time = datetime.now() + timedelta(seconds=token_data['expires_in'])
         
+        refresh_token = token_data.get('refresh_token', '')
+        if not refresh_token:
+            raise Exception("No refresh token received from Google OAuth")
+            
         cursor.execute('''
             INSERT OR REPLACE INTO connections 
             (email, access_token, refresh_token, token_expiry)
@@ -1365,7 +1402,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         ''', (
             profile['emailAddress'],
             token_data['access_token'],
-            token_data.get('refresh_token', ''),
+            refresh_token,
             expiry_time.isoformat()
         ))
         

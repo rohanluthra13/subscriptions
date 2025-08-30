@@ -1,10 +1,222 @@
 <!-- Manage Subscriptions View -->
 <div style="padding: 20px;">
-    <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #333;">Manage Subscriptions</h3>
-    
-    <!-- Placeholder for subscription management interface -->
-    <div style="padding: 40px; text-align: center; color: #666; background: #f9f9f9; border-radius: 8px;">
-        <p>Subscription management interface coming soon...</p>
-        <p style="font-size: 12px; margin-top: 10px;">This will allow editing, adding, and removing subscriptions</p>
+    <!-- Editable subscriptions table -->
+    <div style="height: 75vh; overflow-y: auto;">
+        <table id="manage-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #e0e0e0;">
+                    <th style="text-align: left; padding: 10px; font-weight: 600;">Name</th>
+                    <th style="text-align: left; padding: 10px; font-weight: 600;">Status</th>
+                    <th style="text-align: left; padding: 10px; font-weight: 600;">Renewing</th>
+                    <th style="text-align: left; padding: 10px; font-weight: 600;">Cost</th>
+                    <th style="text-align: left; padding: 10px; font-weight: 600;">Billing Cycle</th>
+                    <th style="width: 40px; padding: 10px;"></th> <!-- Column for plus icon -->
+                </tr>
+            </thead>
+            <tbody id="subscription-rows">
+                {{subscription_rows}}
+            </tbody>
+        </table>
     </div>
 </div>
+
+<style>
+    /* Editable cell styles */
+    .editable-cell {
+        padding: 8px 10px;
+        cursor: text;
+        min-height: 20px;
+    }
+    
+    .editable-cell:focus {
+        outline: none;
+    }
+    
+    /* Select dropdown styling */
+    .editable-select {
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
+        cursor: pointer;
+        padding: 8px 10px;
+        width: 100%;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+    
+    .editable-select:focus {
+        outline: none;
+    }
+    
+    /* Plus icon button */
+    .expand-btn {
+        background: none;
+        border: none;
+        color: #666;
+        cursor: pointer;
+        font-size: 18px;
+        padding: 5px;
+    }
+    
+    /* Add new row */
+    .add-row {
+        background-color: transparent;
+        border-bottom: none;
+    }
+    
+    .add-row td {
+        padding: 15px 10px;
+        text-align: center;
+    }
+    
+    .add-btn {
+        background: none;
+        border: none;
+        color: #666;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 5px;
+    }
+    
+    /* Row styles */
+    #manage-table tbody tr:not(.add-row) {
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    /* Placeholder text for empty cells */
+    .editable-cell:empty::before {
+        content: attr(data-placeholder);
+        color: #999;
+        font-style: italic;
+    }
+</style>
+
+<script>
+    // Make cells editable
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle contenteditable cells
+        const editableCells = document.querySelectorAll('.editable-cell');
+        editableCells.forEach(cell => {
+            cell.addEventListener('blur', function() {
+                // Save changes when cell loses focus
+                saveSubscriptionChanges(this);
+            });
+            
+            cell.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.blur();
+                }
+            });
+        });
+        
+        // Handle select dropdowns
+        const selects = document.querySelectorAll('.editable-select');
+        selects.forEach(select => {
+            select.addEventListener('change', function() {
+                saveSubscriptionChanges(this);
+            });
+        });
+        
+        // Handle expand buttons
+        const expandBtns = document.querySelectorAll('.expand-btn');
+        expandBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Placeholder for expand functionality
+                console.log('Expand subscription:', this.dataset.subscriptionId);
+            });
+        });
+        
+        // Handle add new subscription button
+        const addBtn = document.querySelector('.add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', function() {
+                addNewSubscription();
+            });
+        }
+    });
+    
+    function saveSubscriptionChanges(element) {
+        const row = element.closest('tr');
+        const subscriptionId = row.dataset.subscriptionId;
+        
+        // Collect all data from the row
+        const data = {
+            id: subscriptionId,
+            name: row.querySelector('[data-field="name"]').textContent.trim(),
+            status: row.querySelector('[data-field="status"]').textContent.trim(),
+            auto_renewing: row.querySelector('[name="auto_renewing"]').value,
+            cost: row.querySelector('[data-field="cost"]').textContent.trim(),
+            billing_cycle: row.querySelector('[data-field="billing_cycle"]').textContent.trim()
+        };
+        
+        console.log('Saving changes:', data);
+        // TODO: Send to backend via AJAX
+    }
+    
+    function addNewSubscription() {
+        // Create a new editable row
+        const tbody = document.getElementById('subscription-rows');
+        const newRow = document.createElement('tr');
+        newRow.dataset.subscriptionId = 'new-' + Date.now();
+        
+        newRow.innerHTML = `
+            <td class="editable-cell" contenteditable="true" data-field="name" data-placeholder="Enter name..."></td>
+            <td class="editable-cell" contenteditable="true" data-field="status" data-placeholder="active"></td>
+            <td>
+                <select name="auto_renewing" class="editable-select">
+                    <option value="1" selected>Yes</option>
+                    <option value="0">No</option>
+                </select>
+            </td>
+            <td class="editable-cell" contenteditable="true" data-field="cost" data-placeholder="0.00"></td>
+            <td class="editable-cell" contenteditable="true" data-field="billing_cycle" data-placeholder="monthly"></td>
+            <td style="text-align: center;">
+                <button class="expand-btn" data-subscription-id="new-${Date.now()}">+</button>
+            </td>
+        `;
+        
+        // Insert before the add row
+        const addRow = tbody.querySelector('.add-row');
+        tbody.insertBefore(newRow, addRow);
+        
+        // Focus on the name field
+        newRow.querySelector('[data-field="name"]').focus();
+        
+        // Attach event listeners to new elements
+        attachEventListenersToRow(newRow);
+    }
+    
+    function attachEventListenersToRow(row) {
+        // Attach blur and keydown to editable cells
+        row.querySelectorAll('.editable-cell').forEach(cell => {
+            cell.addEventListener('blur', function() {
+                saveSubscriptionChanges(this);
+            });
+            cell.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.blur();
+                }
+            });
+        });
+        
+        // Attach change to selects
+        row.querySelectorAll('.editable-select').forEach(select => {
+            select.addEventListener('change', function() {
+                saveSubscriptionChanges(this);
+            });
+        });
+        
+        // Attach click to expand button
+        const expandBtn = row.querySelector('.expand-btn');
+        if (expandBtn) {
+            expandBtn.addEventListener('click', function() {
+                console.log('Expand subscription:', this.dataset.subscriptionId);
+            });
+        }
+    }
+</script>

@@ -1186,8 +1186,40 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     
     def render_manage_view(self):
         """Render manage subscriptions view for right panel"""
-        # For now, just render the empty template
-        return self.render_template('manage_view.html')
+        subscriptions = self.sm.get_subscriptions()
+        
+        # Generate editable subscription rows
+        subscription_rows = ""
+        for sub in subscriptions:
+            # Generate row with editable fields
+            subscription_rows += f"""<tr data-subscription-id="{sub.get('id', '')}">
+                <td class="editable-cell" contenteditable="true" data-field="name">{sub['name']}</td>
+                <td class="editable-cell" contenteditable="true" data-field="status">{sub.get('status', '') or ''}</td>
+                <td>
+                    <select name="auto_renewing" class="editable-select">
+                        <option value="1" {'selected' if sub.get('auto_renewing') else ''}>Yes</option>
+                        <option value="0" {'selected' if not sub.get('auto_renewing') else ''}>No</option>
+                    </select>
+                </td>
+                <td class="editable-cell" contenteditable="true" data-field="cost">{sub.get('cost', '') or ''}</td>
+                <td class="editable-cell" contenteditable="true" data-field="billing_cycle">{sub.get('billing_cycle', '') or ''}</td>
+                <td style="text-align: center;">
+                    <button class="expand-btn" data-subscription-id="{sub.get('id', '')}">+</button>
+                </td>
+            </tr>"""
+        
+        # Add the "add new" row at the bottom
+        subscription_rows += """
+            <tr class="add-row">
+                <td colspan="6">
+                    <button class="add-btn">+</button>
+                </td>
+            </tr>
+        """
+        
+        return self.render_template('manage_view.html',
+            subscription_rows=subscription_rows
+        )
 
     def _generate_notepad_markdown(self, subscriptions, other_notes):
         """Generate markdown content from notepad sections"""

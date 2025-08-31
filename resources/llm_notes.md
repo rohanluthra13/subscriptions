@@ -13,29 +13,29 @@ User Notes: this may be expired
 Domains: [heptabase.com] 
 Notes: Regular product updates including feature announcements, beta features, and user engagement emails indicating paid note-taking/knowledge management subscription.
 
-User Check: [ ] Yes | [ ] No
+User Check: [x] Yes | [ ] No
 User Notes: 
 
 **YouTube Premium**
 Domains: [youtube.com] 
 Notes: Welcome message and purchase confirmations indicating premium YouTube subscription with ad-free viewing.
 
-User Check: [ ] Yes | [ ] No
-User Notes: 
+User Check: [x] Yes | [ ] No
+User Notes: yes i'm subscribed. cost per month of INR150.
 
 **API-SPORTS**
 Domains: [api-football.com] 
 Notes: Subscription ending notifications and expiration warnings indicating paid sports data API service.
 
-User Check: [ ] Yes | [ ] No
-User Notes: 
+User Check: [ ] Yes | [x] No
+User Notes: - this is expired
 
 **ZenQuotes.io**
 Domains: [zenquotes.io] 
 Notes: Multiple subscription expiration warnings and renewal reminders indicating paid API or premium quote service.
 
-User Check: [ ] Yes | [ ] No
-User Notes: 
+User Check: [ ] Yes | [x] No
+User Notes: this is expired
 
 **Ancestry**
 Domains: [ancestry.com.au] 

@@ -337,6 +337,15 @@
                 mainContent.innerHTML = html;
                 currentView = viewName;
                 
+                // Execute any script tags in the loaded content
+                const scripts = mainContent.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    newScript.textContent = script.textContent;
+                    document.body.appendChild(newScript);
+                    document.body.removeChild(newScript);
+                });
+                
                 // Re-initialize any JavaScript for the new view
                 initializeCurrentView(viewName);
                 

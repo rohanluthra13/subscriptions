@@ -34,6 +34,14 @@ rm subscriptions.db
 - MCP server integration for AI agent interaction
 - Domain-based subscription detection
 
+**Agent-First Development Philosophy**
+- Single-file architecture optimized for AI agents (Claude Code)
+- Everything in `main.py` for complete context in one read
+- Templates with inline styles/JS to reduce cross-file coordination
+- String-based HTML generation for explicit, traceable rendering
+- No build steps or complex frameworks that obscure logic
+- Note: As complexity grows, we'll modularize strategically while maintaining agent-friendly patterns
+
 **MCP Integration** (active - see `mcp_server.py`)
 - Expose subscription data via MCP protocol  
 - AI agents can query and manage subscriptions
@@ -107,3 +115,4 @@ Goal: Transform from standalone app to MCP server that AI agents can query for s
 
 Practices
 - when you update the database always update the docs/schema.md file as well to ensure they are both aligned
+- you should run this in a venv using python main.py

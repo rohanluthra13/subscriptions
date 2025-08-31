@@ -1047,16 +1047,247 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         return self.render_template('views/review.html', content=content)
     
     def get_notepad_content(self):
-        """Generate content for notepad view"""
-        content = '''
-        <div style="text-align: center; padding: 60px;">
-            <h3>Notepad</h3>
-            <p>Add notes and thoughts about your subscriptions</p>
-            <textarea style="width: 100%; height: 200px; margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Write your notes here..."></textarea>
-            <button class="primary" style="margin-top: 10px;">Save Notes</button>
+        """Generate content for notepad view with paper container design"""
+        # Read existing notes from resources/notepad.md if it exists
+        subscription_items = ""
+        other_notes_items = ""
+        
+        try:
+            with open('resources/notepad.md', 'r') as f:
+                content = f.read()
+                
+            # Parse the markdown to extract items
+            current_section = None
+            for line in content.split('\n'):
+                line = line.strip()
+                if line == "## Subscriptions":
+                    current_section = "subscriptions"
+                elif line == "## Other Notes":
+                    current_section = "other_notes"
+                elif line.startswith('- ') and current_section:
+                    item_text = line[2:].strip()
+                    if current_section == "subscriptions":
+                        subscription_items += f'''
+                        <div class="note-item">
+                            <span class="bullet">•</span>
+                            <input name="subscriptions" value="{item_text}" />
+                        </div>
+                        '''
+                    elif current_section == "other_notes":
+                        other_notes_items += f'''
+                        <div class="note-item">
+                            <span class="bullet">•</span>
+                            <textarea name="other_notes" rows="1">{item_text}</textarea>
+                        </div>
+                        '''
+        except FileNotFoundError:
+            # File doesn't exist yet, start with empty sections
+            pass
+        
+        content = f'''
+        <!-- Header positioned above paper container -->
+        <div style="margin: 20px auto 0 auto; width: clamp(300px, 85%, 700px); padding-left: 0;">
+            <p style="color: #666; font-size: 12px; margin: 0;">notepad / add notes to give your LLM some context</p>
         </div>
+
+        <!-- Paper container for notepad -->
+        <div class="paper-container" style="margin-top: 5px;">
+
+            <div style="height: 65vh; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column;">
+                <form method="post" action="/save_notepad" style="display: flex; flex-direction: column; flex: 1;">
+                    
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="font-size: 16px; font-weight: 400; margin: 0 0 12px 0; color: #333;">subscriptions</h3>
+                        <div id="subscriptions-list" style="margin-bottom: 10px;">
+                            {subscription_items}
+                        </div>
+                        <button type="button" class="add-note" onclick="addNote('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
+                    </div>
+                    
+                    <div style="flex: 0.6;"></div> <!-- Spacer to position Other Notes -->
+                    
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="font-size: 16px; font-weight: 400; margin: 0 0 12px 0; color: #333;">other notes</h3>
+                        <div id="other-notes-list" style="margin-bottom: 10px;">
+                            {other_notes_items}
+                        </div>
+                        <button type="button" class="add-note" onclick="addNote('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
+                    </div>
+                    
+                </form>
+            </div>
+
+            <div style="text-align: center; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+                <button type="button" onclick="saveNotepad(event)" style="background: #007bff; color: white; border: none; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; margin-right: 8px;">save</button>
+                <button type="button" onclick="loadView('home')" style="background: white; color: #666; border: 1px solid #ddd; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit;">cancel</button>
+            </div>
+        </div>
+
+        <style>
+            /* Paper container effect */
+            .paper-container {{
+                background: white;
+                border-radius: 0;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+                margin: 20px auto;
+                width: clamp(300px, 85%, 700px);
+                padding: 40px;
+                position: relative;
+                transition: box-shadow 0.2s ease;
+                font-family: "SF Mono", monospace;
+            }}
+            
+            /* Subtle texture overlay */
+            .paper-container::before {{
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(135deg, 
+                    rgba(255,255,255,0) 0%, 
+                    rgba(0,0,0,0.015) 100%);
+                pointer-events: none;
+            }}
+            
+            /* Note items styling */
+            .note-item {{ 
+                display: flex; 
+                align-items: flex-start; 
+                margin-bottom: 6px; 
+                padding: 6px 8px; 
+                background: white; 
+                border-radius: 3px; 
+                position: relative;
+                z-index: 1;
+            }}
+            .note-item input, 
+            .note-item textarea {{ 
+                flex: 1; 
+                border: none; 
+                background: white; 
+                font-family: inherit; 
+                font-size: 12px; 
+                padding: 0;
+                width: 100%;
+                resize: none;
+                overflow: hidden;
+                word-wrap: break-word;
+                line-height: 1.4;
+            }}
+            .note-item input:focus,
+            .note-item textarea:focus {{ 
+                outline: none; 
+            }}
+            .bullet {{ 
+                color: #666; 
+                margin-right: 6px; 
+                font-size: 12px; 
+                margin-top: 1px;
+                flex-shrink: 0;
+            }}
+            .add-note:hover {{ color: #333; }}
+        </style>
+
+        <script>
+            function addNote(section) {{
+                const listId = section + '-list';
+                const inputName = section === 'subscriptions' ? 'subscriptions' : 'other_notes';
+                const list = document.getElementById(listId);
+                
+                const noteItem = document.createElement('div');
+                noteItem.className = 'note-item';
+                noteItem.innerHTML = `
+                    <span class="bullet">•</span>
+                    <textarea name="${{inputName}}" placeholder="enter note..." rows="1"></textarea>
+                `;
+                
+                list.appendChild(noteItem);
+                
+                // Focus the new textarea and add event listeners
+                const newTextarea = noteItem.querySelector('textarea');
+                newTextarea.focus();
+                
+                // Add Enter key handler
+                newTextarea.addEventListener('keydown', function(e) {{
+                    if (e.key === 'Enter' && !e.shiftKey) {{
+                        e.preventDefault();
+                        addNote(section);
+                    }}
+                }});
+                
+                // Auto-resize textarea as user types
+                newTextarea.addEventListener('input', function() {{
+                    this.style.height = 'auto';
+                    this.style.height = this.scrollHeight + 'px';
+                }});
+            }}
+            
+            function saveNotepad(event) {{
+                // Get all input values directly
+                const params = new URLSearchParams();
+                
+                // Get all subscription inputs (both input and textarea elements)
+                const subInputs = document.querySelectorAll('input[name="subscriptions"], textarea[name="subscriptions"]');
+                subInputs.forEach(input => {{
+                    if (input.value.trim()) {{  // Only add non-empty values
+                        params.append('subscriptions', input.value);
+                    }}
+                }});
+                
+                // Get all other_notes inputs (both input and textarea elements)
+                const notesInputs = document.querySelectorAll('input[name="other_notes"], textarea[name="other_notes"]');
+                notesInputs.forEach(input => {{
+                    if (input.value.trim()) {{  // Only add non-empty values
+                        params.append('other_notes', input.value);
+                    }}
+                }});
+                
+                // Show saving indicator
+                const saveBtn = event.currentTarget;
+                const originalText = saveBtn.textContent;
+                saveBtn.textContent = 'saving...';
+                saveBtn.disabled = true;
+                
+                fetch('/save_notepad', {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }},
+                    body: params.toString()
+                }})
+                .then(response => {{
+                    if (response.ok) {{
+                        saveBtn.textContent = 'saved!';
+                        setTimeout(() => {{
+                            loadView('notepad'); // Reload the notepad view
+                        }}, 500);
+                    }} else {{
+                        throw new Error(`Save failed: ${{response.status}}`);
+                    }}
+                }})
+                .catch(error => {{
+                    console.error('Save error:', error);
+                    saveBtn.textContent = 'error - try again';
+                    saveBtn.disabled = false;
+                    setTimeout(() => {{
+                        saveBtn.textContent = originalText;
+                    }}, 2000);
+                }});
+            }}
+            
+            // Add initial empty inputs if no existing notes
+            if (document.querySelectorAll('#subscriptions-list .note-item').length === 0) {{
+                addNote('subscriptions');
+            }}
+            if (document.querySelectorAll('#other-notes-list .note-item').length === 0) {{
+                addNote('other-notes');
+            }}
+        </script>
         '''
-        return self.render_template('views/notepad.html', content=content)
+        
+        return content
 
     def render_subscriptions_table(self, subscriptions):
         """Render subscriptions table for home view"""

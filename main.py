@@ -1532,24 +1532,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             **column_headers
         )
     
-    def render_subscriptions_table(self, subscriptions):
-        if not subscriptions:
-            return self.render_template('empty_subscriptions.html')
-        
-        subscription_rows = ""
-        for sub in subscriptions:
-            subscription_rows += f"""<tr>
-                <td>{sub['name']}</td>
-                <td>{sub['status']}</td>
-                <td>{'Yes' if sub.get('auto_renewing') else 'No'}</td>
-                <td>{sub.get('cost', '') or ''}</td>
-                <td>{sub.get('billing_cycle', '') or ''}</td>
-                <td>{sub.get('next_billing_date', '') or ''}</td>
-            </tr>"""
-        
-        return self.render_template('subscriptions_table.html',
-            subscription_rows=subscription_rows
-        )
 
     def _parse_notepad_content(self):
         """Parse notepad markdown content into structured data"""

@@ -1259,6 +1259,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         return f'''
         <div class="subscription-item" data-completed="{data_completed}" style="margin-bottom: 20px;">
+            <input type="hidden" name="subscription_name_{index}" value="{item["name"]}">
             <div style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: relative; z-index: 1;">
                 <div style="margin-bottom: 10px;">
                     <h4 style="margin: 0 0 5px 0; font-size: 16px; font-weight: 500; color: #333;">{item["name"]}</h4>
@@ -1771,11 +1772,22 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             # Group form data by subscription index
             subscription_data = {}
             for key, value in form_data.items():
-                if key.startswith(('check_', 'notes_', 'name_')):
-                    field_type, index = key.split('_', 1)
+                # Handle field names like user_check_0, user_notes_0, subscription_name_0
+                if key.startswith('user_check_'):
+                    index = key.replace('user_check_', '')
                     if index not in subscription_data:
                         subscription_data[index] = {}
-                    subscription_data[index][field_type] = value[0] if value else ''
+                    subscription_data[index]['check'] = value[0] if value else ''
+                elif key.startswith('user_notes_'):
+                    index = key.replace('user_notes_', '')
+                    if index not in subscription_data:
+                        subscription_data[index] = {}
+                    subscription_data[index]['notes'] = value[0] if value else ''
+                elif key.startswith('subscription_name_'):
+                    index = key.replace('subscription_name_', '')
+                    if index not in subscription_data:
+                        subscription_data[index] = {}
+                    subscription_data[index]['name'] = value[0] if value else ''
             
             # Convert to update format
             for index_data in subscription_data.values():

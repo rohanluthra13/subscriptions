@@ -41,35 +41,35 @@ User Notes: this is expired
 Domains: [ancestry.com.au] 
 Notes: Membership renewal notifications, order confirmations for DNA kits, and sales promotions indicating active genealogy service subscription.
 
-User Check: [ ] Yes | [ ] No
+User Check: [ ] Yes | [x] No
 User Notes: 
 
 **AllTrails+**
 Domains: [alltrails.com] 
 Notes: Membership notifications and subscription management emails indicating premium hiking/trail app subscription.
 
-User Check: [ ] Yes | [ ] No
+User Check: [ ] Yes | [x] No
 User Notes: 
 
 **WHOOP**
 Domains: [whoop.com] 
 Notes: Monthly performance assessments, terms updates, and personalized fitness reports indicating premium wearable device subscription.
 
-User Check: [ ] Yes | [ ] No
+User Check: [ ] Yes | [x] No
 User Notes: 
 
 **MacroFactor**
 Domains: [macrofactorapp.com] 
 Notes: Privacy policy updates, upcoming feature announcements, and terms updates indicating ongoing paid subscription to fitness tracking app.
 
-User Check: [ ] Yes | [ ] No
+User Check: [x] Yes | [ ] No
 User Notes: 
 
 **Notion**
 Domains: [notion.so] 
 Notes: Plan change notifications, trial updates, and team features indicating paid Notion subscription beyond free tier.
 
-User Check: [ ] Yes | [ ] No
+User Check: [x] Yes | [ ] No
 User Notes: 
 
 **Steam**

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Subscription Manager</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f6f6f6; 
+        }
+        
+        /* Main container */
+        .container { 
+            display: flex; 
+            height: 100vh; 
+        }
+        
+        /* Icon sidebar */
+        .sidebar {
+            width: 200px;
+            background: transparent;
+            display: flex;
+            flex-direction: column;
+            padding-top: 180px;
+            position: relative;
+            z-index: 100;
+        }
+        
+        /* Navigation items */
+        .nav-item {
+            display: flex;
+            align-items: center;
+            height: 60px;
+            padding: 0 20px;
+            text-decoration: none;
+            color: #333;
+            position: relative;
+            transition: color 0.2s ease;
+            overflow: hidden;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            color: #666;
+        }
+        
+        .nav-item.active {
+            color: #1a73e8;
+        }
+        
+        /* Icons and labels */
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: transform 0.2s ease;
+        }
+        
+        .nav-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+        }
+        
+        .nav-item:hover .nav-icon {
+            transform: scale(1.2);
+        }
+        
+        .nav-label {
+            margin-left: 20px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        
+        .nav-item:hover .nav-label {
+            opacity: 1;
+        }
+        
+        /* Divider - hidden */
+        .nav-divider {
+            display: none;
+        }
+        
+        /* Main content area */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+        
+        .main-content h2 { 
+            margin: 0 0 30px 0; 
+            font-size: 28px; 
+            font-weight: 600; 
+        }
+        
+        /* Loading spinner */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+        }
+        
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1a73e8;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Global table styling */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        th, td { 
+            padding: 16px; 
+            text-align: left; 
+            border-bottom: 1px solid #e0e0e0; 
+        }
+        
+        th { 
+            font-weight: 600; 
+            font-size: 13px; 
+            color: #666; 
+            background: #fafafa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        td { 
+            font-size: 14px; 
+        }
+        
+        tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* Button styling */
+        button { 
+            padding: 10px 20px; 
+            margin-left: 10px;
+            border: 1px solid #ddd; 
+            background: white; 
+            cursor: pointer; 
+            font-size: 14px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        button:hover { 
+            background: #f8f9fa; 
+            border-color: #999;
+        }
+        
+        .primary { 
+            background: #1a73e8; 
+            color: white; 
+            border-color: #1a73e8; 
+        }
+        
+        .primary:hover { 
+            background: #1557b0; 
+            border-color: #1557b0;
+        }
+        
+        /* Status text */
+        .status { 
+            color: #666; 
+            font-size: 14px; 
+            margin-bottom: 10px; 
+        }
+        
+        /* Status badges */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-cancelled {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-trial {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="sidebar">
+            <div class="nav-item" data-view="home">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+                </span>
+                <span class="nav-label">home</span>
+            </div>
+            
+            <div class="nav-item" data-view="manage">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </span>
+                <span class="nav-label">manage subscriptions</span>
+            </div>
+            
+            <div class="nav-item" data-view="review">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </span>
+                <span class="nav-label">for review</span>
+            </div>
+            
+            <div class="nav-divider"></div>
+            
+            <div class="nav-item" data-view="notepad">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/></svg>
+                </span>
+                <span class="nav-label">notepad</span>
+            </div>
+            
+            <div class="nav-item" data-view="emails">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </span>
+                <span class="nav-label">email setup</span>
+            </div>
+        </nav>
+        
+        <main class="main-content" id="main-content">
+            <!-- View content will be loaded here -->
+            <div class="loading">
+                <div class="spinner"></div>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        let currentView = 'home';
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get view from URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const view = urlParams.get('view') || 'home';
+            
+            // Load initial view
+            loadView(view);
+            
+            // Setup navigation
+            document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+                item.addEventListener('click', function() {
+                    const view = this.dataset.view;
+                    loadView(view);
+                    
+                    // Update URL without reload
+                    const url = view === 'home' ? '/' : `/?view=${view}`;
+                    history.pushState({view}, '', url);
+                });
+            });
+            
+            // Handle back/forward buttons
+            window.addEventListener('popstate', function(e) {
+                if (e.state && e.state.view) {
+                    loadView(e.state.view);
+                } else {
+                    loadView('home');
+                }
+            });
+        });
+        
+        async function loadView(viewName) {
+            if (currentView === viewName) return;
+            
+            // Show loading
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+            
+            // Update active nav
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const activeNav = document.querySelector(`[data-view="${viewName}"]`);
+            if (activeNav) {
+                activeNav.classList.add('active');
+            }
+            
+            try {
+                // Fetch view content
+                const response = await fetch(`/api/view/${viewName}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const html = await response.text();
+                mainContent.innerHTML = html;
+                currentView = viewName;
+                
+                // Re-initialize any JavaScript for the new view
+                initializeCurrentView(viewName);
+                
+            } catch (error) {
+                console.error('Failed to load view:', error);
+                mainContent.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <h2>Error Loading View</h2>
+                        <p>Failed to load ${viewName} view. Please try again.</p>
+                        <button onclick="loadView('${viewName}')">Retry</button>
+                    </div>
+                `;
+            }
+        }
+        
+        function initializeCurrentView(viewName) {
+            // Re-attach event listeners based on view
+            switch(viewName) {
+                case 'manage':
+                    if (typeof initializeSubscriptionManager === 'function') {
+                        initializeSubscriptionManager();
+                    }
+                    break;
+                case 'review':
+                    if (typeof initializeReviewView === 'function') {
+                        initializeReviewView();
+                    }
+                    break;
+                case 'notepad':
+                    if (typeof initializeNotepadView === 'function') {
+                        initializeNotepadView();
+                    }
+                    break;
+            }
+        }
+        
+        // Utility functions for views to use
+        window.loadView = loadView;
+    </script>
+</body>
+</html>

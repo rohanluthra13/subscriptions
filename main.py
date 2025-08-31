@@ -1011,29 +1011,80 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         connections = self.sm.get_connections()
         connected = len(connections) > 0
         
+        # Email address display
+        email_address = connections[0]["email"] if connected else "Not connected"
+        
+        # Action buttons
         if not connected:
-            content = '''
-            <div style="text-align: center; padding: 60px;">
-                <h3>Gmail Not Connected</h3>
-                <p>Connect your Gmail account to view emails</p>
+            action_buttons = '''
                 <a href="/auth/gmail" style="text-decoration: none;">
-                    <button class="primary">Connect Gmail</button>
+                    <button style="padding: 10px 20px; border: 1px solid #1a73e8; background: #1a73e8; color: white; cursor: pointer; font-size: 14px; border-radius: 4px;">
+                        Connect Gmail
+                    </button>
                 </a>
-            </div>
             '''
         else:
-            content = f'''
-            <div style="text-align: center; padding: 60px;">
-                <h3>Email Analysis</h3>
-                <p>Connected: {connections[0]["email"]}</p>
-                <p>Processed Emails: {email_count}</p>
-                <form action="/fetch" method="post" style="margin-top: 30px;">
-                    <button type="submit" class="primary">Fetch Latest Emails</button>
-                </form>
-            </div>
+            action_buttons = '''
+                <button onclick="changeEmail()" style="padding: 10px 20px; margin-right: 10px; border: 1px solid #ddd; background: white; cursor: pointer; font-size: 14px; border-radius: 4px;">
+                    Change Email
+                </button>
+                <button onclick="fetchEmails()" style="padding: 10px 20px; border: 1px solid #ddd; background: white; cursor: pointer; font-size: 14px; border-radius: 4px;">
+                    Fetch Emails
+                </button>
             '''
         
-        return self.render_template('views/emails.html', content=content)
+        # Generate emails table
+        emails_table = ""
+        if connected and email_count > 0:
+            # Get recent emails for display
+            emails_data = self.sm.get_processed_emails(limit=20)
+            emails = emails_data.get('emails', [])
+            if emails:
+                emails_table = '''
+                <table>
+                    <thead>
+                        <tr>
+                            <th>From</th>
+                            <th>Subject</th>
+                            <th>Date</th>
+                            <th>Domain</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                '''
+                for email in emails:
+                    # Format date if available
+                    date_str = email.get('received_at', '')
+                    if date_str:
+                        try:
+                            # Format timestamp to readable date
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                            date_str = dt.strftime('%Y-%m-%d %H:%M')
+                        except:
+                            pass
+                    
+                    emails_table += f'''
+                    <tr>
+                        <td>{email.get('sender', '')}</td>
+                        <td>{email.get('subject', '')}</td>
+                        <td>{date_str}</td>
+                        <td>{email.get('sender_domain', '')}</td>
+                    </tr>
+                    '''
+                emails_table += '</tbody></table>'
+            else:
+                emails_table = '<p style="color: #666; text-align: center; margin-top: 40px;">No emails processed yet. Click "Fetch Emails" to start.</p>'
+        elif connected:
+            emails_table = '<p style="color: #666; text-align: center; margin-top: 40px;">No emails fetched yet. Click "Fetch Emails" to start.</p>'
+        else:
+            emails_table = ''
+        
+        return self.render_template('views/emails.html', 
+            email_address=email_address,
+            action_buttons=action_buttons,
+            emails_table=emails_table
+        )
     
     def get_review_content(self):
         """Generate content for review view using template"""

@@ -1,5 +1,110 @@
-<h2>Email Setup</h2>
-
-<div class="email-setup-container">
-    {{content}}
+<!-- Email setup view with top padding and no header -->
+<div style="padding-top: 60px;">
+    
+    <!-- Connected email display -->
+    <div style="margin-bottom: 30px;">
+        <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Connected Account:</div>
+        <div style="font-size: 16px; color: #333;">{{email_address}}</div>
+    </div>
+    
+    <!-- Action buttons -->
+    <div style="margin-bottom: 40px;">
+        {{action_buttons}}
+    </div>
+    
+    <!-- Emails table -->
+    <div id="emails-table">
+        {{emails_table}}
+    </div>
 </div>
+
+<style>
+    /* Button hover effects */
+    button:hover {
+        background: #f8f9fa !important;
+        border-color: #999 !important;
+    }
+    
+    /* Primary button hover */
+    button[style*="background: #1a73e8"]:hover {
+        background: #1557b0 !important;
+        border-color: #1557b0 !important;
+    }
+    
+    /* Table styling */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        margin-top: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    th, td {
+        padding: 16px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    th {
+        font-weight: 600;
+        font-size: 13px;
+        color: #666;
+        background: #fafafa;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    td {
+        font-size: 14px;
+    }
+    
+    tr:last-child td {
+        border-bottom: none;
+    }
+</style>
+
+<script>
+    function changeEmail() {
+        // Disconnect and reconnect flow
+        if (confirm('This will disconnect the current account. Continue?')) {
+            window.location.href = '/disconnect';
+        }
+    }
+    
+    function fetchEmails() {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = 'Fetching...';
+        btn.disabled = true;
+        
+        fetch('/fetch', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (response.ok) {
+                btn.textContent = 'Fetched!';
+                setTimeout(() => {
+                    // Reload to show new emails
+                    loadView('emails');
+                }, 1000);
+            } else {
+                throw new Error('Fetch failed');
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            btn.textContent = 'Error - try again';
+            btn.disabled = false;
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        });
+    }
+    
+    // Make functions available globally
+    window.changeEmail = changeEmail;
+    window.fetchEmails = fetchEmails;
+</script>

@@ -71,9 +71,9 @@ class SubscriptionManager:
         self.redirect_uri = f"http://localhost:{self.port}/auth/callback"
     
     @contextmanager
-    def db_connection(self):
+    def db_connection(self, timeout=10.0):
         """Context manager for database connections - ensures proper cleanup"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=timeout)
         conn.row_factory = sqlite3.Row  # Enable column access by name
         try:
             yield conn
@@ -564,30 +564,48 @@ class SubscriptionManager:
 
 
     def get_connections(self):
-        """Get all Gmail connections"""
-        with self.db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM connections ORDER BY created_at DESC')
-            columns = [desc[0] for desc in cursor.description]
-            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        return results
+        """Get all Gmail connections with timeout handling"""
+        try:
+            with self.db_connection(timeout=5.0) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM connections ORDER BY created_at DESC')
+                columns = [desc[0] for desc in cursor.description]
+                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            return results
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"Database timeout/lock in get_connections: {e}")
+                return []  # Return empty list to allow page to render
+            raise
 
     def get_subscriptions(self):
-        """Get all subscriptions"""
-        with self.db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM subscriptions ORDER BY created_at DESC')
-            columns = [desc[0] for desc in cursor.description]
-            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        return results
+        """Get all subscriptions with timeout handling"""
+        try:
+            with self.db_connection(timeout=5.0) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM subscriptions ORDER BY created_at DESC')
+                columns = [desc[0] for desc in cursor.description]
+                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            return results
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"Database timeout/lock in get_subscriptions: {e}")
+                return []  # Return empty list to allow page to render
+            raise  # Re-raise other operational errors
 
     def get_email_count(self):
-        """Get total count of processed emails"""
-        with self.db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM processed_emails')
-            count = cursor.fetchone()[0]
-        return count
+        """Get total count of processed emails with timeout handling"""
+        try:
+            with self.db_connection(timeout=5.0) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT COUNT(*) FROM processed_emails')
+                count = cursor.fetchone()[0]
+            return count
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"Database timeout/lock in get_email_count: {e}")
+                return 0  # Return 0 to allow page to render
+            raise
 
     def get_processed_emails(self, limit: int = None, offset: int = 0, filters: dict = None, sort_by: str = None, sort_dir: str = 'desc'):
         """Get processed emails with optional pagination, filters, and sorting"""
@@ -811,7 +829,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         params = parse_qs(url.query)
         
         if path == '/':
-            self.serve_dashboard()
+            self.serve_base_page()
+        elif path.startswith('/api/view/'):
+            view_name = path.split('/')[-1]
+            self.serve_view_fragment(view_name)
         elif path == '/status':
             self.handle_status_api()
         elif path == '/auth/gmail':
@@ -843,7 +864,243 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 
 
 
-    def serve_dashboard(self):
+    def serve_base_page(self):
+        """Serve the base HTML page with navigation"""
+        html = self.render_template('base.html')
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode())
+    
+    def serve_view_fragment(self, view_name):
+        """Serve view fragment for AJAX loading"""
+        try:
+            html = self.get_view_content(view_name)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(html.encode())
+        except Exception as e:
+            self.send_error(500, f"Failed to load view: {str(e)}")
+    
+    def get_view_content(self, view_name):
+        """Get content for a specific view"""
+        if view_name == 'home':
+            return self.get_home_content()
+        elif view_name == 'manage':
+            return self.get_manage_content()
+        elif view_name == 'emails':
+            return self.get_emails_content()
+        elif view_name == 'review':
+            return self.get_review_content()
+        elif view_name == 'notepad':
+            return self.get_notepad_content()
+        else:
+            return f"<p>Unknown view: {view_name}</p>"
+    
+    def get_home_content(self):
+        """Generate content for home view with summary bullets"""
+        try:
+            subscriptions = self.sm.get_subscriptions()
+            
+            # Calculate totals (same logic as manage view)
+            monthly_total = 0
+            yearly_total = 0
+            active_count = 0
+            
+            for sub in subscriptions:
+                cost = float(sub.get('cost', 0) or 0)
+                cycle = (sub.get('billing_cycle', '') or '').lower()
+                status = (sub.get('status', '') or '').lower()
+                
+                if status == 'active' and cost > 0:
+                    active_count += 1
+                    if cycle == 'monthly':
+                        monthly_total += cost
+                        yearly_total += cost * 12
+                    elif cycle in ['yearly', 'annual']:
+                        yearly_total += cost
+                        monthly_total += cost / 12
+            
+            # Generate bullet list content
+            content = f'''
+            <div style="padding: 60px 0;">
+                <h2>what am i paying for</h2>
+                <ul style="font-size: 14px; line-height: 1.6; list-style: none; padding: 0; margin-top: 30px;">
+                    <li style="margin-bottom: 12px;">• {active_count} subscriptions</li>
+                    <li style="margin-bottom: 12px;">• ${monthly_total:.2f} per month</li>
+                    <li style="margin-bottom: 12px;">• ${yearly_total:.2f} per year</li>
+                </ul>
+            </div>
+            '''
+            
+            return content
+            
+        except Exception as e:
+            print(f"Error generating home content: {e}")
+            # Return a fallback content when database issues occur
+            return '''
+            <div style="padding: 60px 0;">
+                <h2>what am i paying for</h2>
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <p>Having trouble loading subscription data.</p>
+                    <p style="margin-top: 20px;">
+                        <button onclick="loadView('home')" style="margin-right: 10px;">Retry</button>
+                        <button onclick="loadView('manage')">Go to Manage Subscriptions</button>
+                    </p>
+                </div>
+            </div>
+            '''
+    
+    def get_manage_content(self):
+        """Generate content for manage view with all data"""
+        subscriptions = self.sm.get_subscriptions()
+        
+        # Calculate totals
+        monthly_total = 0
+        yearly_total = 0
+        active_count = 0
+        
+        for sub in subscriptions:
+            cost = float(sub.get('cost', 0) or 0)
+            cycle = (sub.get('billing_cycle', '') or '').lower()
+            status = (sub.get('status', '') or '').lower()
+            
+            if status == 'active' and cost > 0:
+                active_count += 1
+                if cycle == 'monthly':
+                    monthly_total += cost
+                    yearly_total += cost * 12
+                elif cycle in ['yearly', 'annual']:
+                    yearly_total += cost
+                    monthly_total += cost / 12
+        
+        # Generate subscription rows
+        subscription_rows = ""
+        for sub in subscriptions:
+            subscription_rows += f'''
+            <tr data-subscription-id="{sub.get('id', '')}">
+                <td class="editable-cell" contenteditable="true" data-field="name">{sub['name']}</td>
+                <td class="editable-cell" contenteditable="true" data-field="category">{sub.get('category', '') or ''}</td>
+                <td><span class="status-badge status-active">{sub.get('status', 'active')}</span></td>
+                <td>
+                    <select name="auto_renewing" class="editable-select">
+                        <option value="1" {'selected' if sub.get('auto_renewing') else ''}>Yes</option>
+                        <option value="0" {'selected' if not sub.get('auto_renewing') else ''}>No</option>
+                    </select>
+                </td>
+                <td class="editable-cell" contenteditable="true" data-field="cost">{sub.get('cost', '') or ''}</td>
+                <td class="editable-cell" contenteditable="true" data-field="billing_cycle">{sub.get('billing_cycle', '') or ''}</td>
+                <td style="text-align: center;">
+                    <button class="expand-btn" data-subscription-id="{sub.get('id', '')}">+</button>
+                </td>
+            </tr>'''
+        
+        return self.render_template('views/manage.html',
+            monthly_total=f"{monthly_total:.2f}",
+            yearly_total=f"{yearly_total:.2f}",
+            active_count=str(active_count),
+            subscription_rows=subscription_rows
+        )
+    
+    def get_emails_content(self):
+        """Generate content for emails view"""
+        email_count = self.sm.get_email_count()
+        connections = self.sm.get_connections()
+        connected = len(connections) > 0
+        
+        if not connected:
+            content = '''
+            <div style="text-align: center; padding: 60px;">
+                <h3>Gmail Not Connected</h3>
+                <p>Connect your Gmail account to view emails</p>
+                <a href="/auth/gmail" style="text-decoration: none;">
+                    <button class="primary">Connect Gmail</button>
+                </a>
+            </div>
+            '''
+        else:
+            content = f'''
+            <div style="text-align: center; padding: 60px;">
+                <h3>Email Analysis</h3>
+                <p>Connected: {connections[0]["email"]}</p>
+                <p>Processed Emails: {email_count}</p>
+                <form action="/fetch" method="post" style="margin-top: 30px;">
+                    <button type="submit" class="primary">Fetch Latest Emails</button>
+                </form>
+            </div>
+            '''
+        
+        return self.render_template('views/emails.html', content=content)
+    
+    def get_review_content(self):
+        """Generate content for review view"""
+        content = '''
+        <div style="text-align: center; padding: 60px;">
+            <h3>Subscription Review</h3>
+            <p>AI-discovered subscriptions will appear here for review</p>
+            <p style="color: #666;">Run email analysis first to generate suggestions</p>
+        </div>
+        '''
+        return self.render_template('views/review.html', content=content)
+    
+    def get_notepad_content(self):
+        """Generate content for notepad view"""
+        content = '''
+        <div style="text-align: center; padding: 60px;">
+            <h3>Notepad</h3>
+            <p>Add notes and thoughts about your subscriptions</p>
+            <textarea style="width: 100%; height: 200px; margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Write your notes here..."></textarea>
+            <button class="primary" style="margin-top: 10px;">Save Notes</button>
+        </div>
+        '''
+        return self.render_template('views/notepad.html', content=content)
+
+    def render_subscriptions_table(self, subscriptions):
+        """Render subscriptions table for home view"""
+        if not subscriptions:
+            return '''
+            <div style="text-align: center; padding: 60px;">
+                <h3>No Subscriptions Yet</h3>
+                <p>Start by adding subscriptions manually or connecting Gmail to discover them</p>
+                <a href="javascript:loadView('manage')" style="text-decoration: none;">
+                    <button class="primary">Manage Subscriptions</button>
+                </a>
+            </div>
+            '''
+        
+        table_html = '''
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Cost</th>
+                    <th>Billing Cycle</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+        '''
+        
+        for sub in subscriptions:
+            status_class = f"status-{sub.get('status', 'active').lower()}"
+            table_html += f'''
+            <tr>
+                <td>{sub['name']}</td>
+                <td>{sub.get('category', '') or '—'}</td>
+                <td>${sub.get('cost', '0') or '0'}</td>
+                <td>{sub.get('billing_cycle', '') or '—'}</td>
+                <td><span class="status-badge {status_class}">{sub.get('status', 'active')}</span></td>
+            </tr>
+            '''
+        
+        table_html += '</tbody></table>'
+        return table_html
+
+    def _generate_notepad_markdown(self, subscriptions, other_notes):
         """Serve two-panel dashboard"""
         connections = self.sm.get_connections()
         subscriptions = self.sm.get_subscriptions()
@@ -1737,7 +1994,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 def create_handler(subscription_manager, job_manager):
     """Create request handler with subscription manager and job manager"""
     def handler(*args, **kwargs):
-        SimpleWebServer(subscription_manager, job_manager, *args, **kwargs)
+        return SimpleWebServer(subscription_manager, job_manager, *args, **kwargs)
     return handler
 
 def main():

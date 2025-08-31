@@ -268,7 +268,7 @@
     </div>
     
     <script>
-        let currentView = 'home';
+        let currentView = null;
         
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -301,7 +301,7 @@
             });
         });
         
-        async function loadView(viewName) {
+        async function loadView(viewName, retryCount = 0) {
             if (currentView === viewName) return;
             
             // Show loading
@@ -318,8 +318,17 @@
             }
             
             try {
-                // Fetch view content
-                const response = await fetch(`/api/view/${viewName}`);
+                // Create timeout controller
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                
+                // Fetch view content with timeout
+                const response = await fetch(`/api/view/${viewName}`, {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
@@ -333,13 +342,36 @@
                 
             } catch (error) {
                 console.error('Failed to load view:', error);
-                mainContent.innerHTML = `
-                    <div style="text-align: center; padding: 40px;">
-                        <h2>Error Loading View</h2>
-                        <p>Failed to load ${viewName} view. Please try again.</p>
-                        <button onclick="loadView('${viewName}')">Retry</button>
-                    </div>
-                `;
+                
+                // Different error handling for initial load vs retries
+                if (error.name === 'AbortError' && retryCount === 0) {
+                    // First timeout - offer retry with options
+                    mainContent.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <h2>Loading Taking Longer Than Expected</h2>
+                            <p>The ${viewName} view is taking a while to load. This might be due to database processing.</p>
+                            <div style="margin-top: 30px;">
+                                <button onclick="loadView('${viewName}', 1)" style="margin-right: 10px;">Try Again</button>
+                                ${viewName === 'home' ? '<button onclick="loadView(\'manage\')">Go to Manage Subscriptions</button>' : ''}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Other errors or second retry
+                    const isTimeout = error.name === 'AbortError';
+                    const errorMessage = isTimeout ? 'Request timed out after 15 seconds' : error.message;
+                    
+                    mainContent.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <h2>Error Loading View</h2>
+                            <p>Failed to load ${viewName} view: ${errorMessage}</p>
+                            <div style="margin-top: 30px;">
+                                <button onclick="loadView('${viewName}')" style="margin-right: 10px;">Retry</button>
+                                ${viewName === 'home' ? '<button onclick="loadView(\'manage\')">Go to Manage Subscriptions</button>' : ''}
+                            </div>
+                        </div>
+                    `;
+                }
             }
         }
         

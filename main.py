@@ -1195,47 +1195,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             other_notes_items=other_notes_items
         )
 
-    def render_subscriptions_table(self, subscriptions):
-        """Render subscriptions table for home view"""
-        if not subscriptions:
-            return '''
-            <div style="text-align: center; padding: 60px;">
-                <h3>No Subscriptions Yet</h3>
-                <p>Start by adding subscriptions manually or connecting Gmail to discover them</p>
-                <a href="javascript:loadView('manage')" style="text-decoration: none;">
-                    <button class="primary">Manage Subscriptions</button>
-                </a>
-            </div>
-            '''
-        
-        table_html = '''
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th>Cost</th>
-                    <th>Billing Cycle</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-        '''
-        
-        for sub in subscriptions:
-            status_class = f"status-{sub.get('status', 'active').lower()}"
-            table_html += f'''
-            <tr>
-                <td>{sub['name']}</td>
-                <td>{sub.get('category', '') or '—'}</td>
-                <td>${sub.get('cost', '0') or '0'}</td>
-                <td>{sub.get('billing_cycle', '') or '—'}</td>
-                <td><span class="status-badge {status_class}">{sub.get('status', 'active')}</span></td>
-            </tr>
-            '''
-        
-        table_html += '</tbody></table>'
-        return table_html
 
     def _generate_review_item(self, item, index):
         """Generate HTML for a single review item"""
@@ -1301,57 +1260,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     
     
 
-    def _parse_notepad_content(self):
-        """Parse notepad markdown content into structured data"""
-        subscriptions = []
-        other_notes = []
-        
-        # Ensure directory exists
-        os.makedirs('resources', exist_ok=True)
-        
-        try:
-            with open('resources/notepad.md', 'r') as f:
-                content = f.read()
-                
-            current_section = None
-            for line in content.split('\n'):
-                line = line.strip()
-                if line == '## Subscriptions':
-                    current_section = 'subscriptions'
-                elif line == '## Other Notes':
-                    current_section = 'other_notes'
-                elif line.startswith('- ') and current_section:
-                    item = line[2:]  # Remove '- ' prefix
-                    if current_section == 'subscriptions':
-                        subscriptions.append(item)
-                    elif current_section == 'other_notes':
-                        other_notes.append(item)
-        except FileNotFoundError:
-            # File doesn't exist yet, create it with default structure
-            default_content = "## Subscriptions\n\n## Other Notes\n"
-            with open('resources/notepad.md', 'w') as f:
-                f.write(default_content)
-        
-        return subscriptions, other_notes
 
-    def _generate_notepad_items_html(self, notes, input_name):
-        """Generate HTML for notepad items with proper escaping"""
-        import html
-        items = []
-        for note in notes:
-            # Calculate initial rows based on content length
-            lines = note.count('\n') + 1
-            # Also account for wrapped lines (rough estimate)
-            estimated_rows = max(1, lines, len(note) // 80)
-            
-            items.append(f'''
-                <div class="note-item">
-                    <span class="bullet">•</span>
-                    <textarea name="{input_name}" rows="{estimated_rows}" 
-                        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
-                        onkeydown="if(event.key==='Enter' && !event.shiftKey){{event.preventDefault();addNote('{input_name.replace('_notes', '-notes') if '_notes' in input_name else input_name}')}}">{html.escape(note)}</textarea>
-                </div>''')
-        return ''.join(items)
 
     
     

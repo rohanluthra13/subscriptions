@@ -18,7 +18,6 @@ from socketserver import ThreadingMixIn
 from dotenv import load_dotenv
 from email.utils import parsedate_to_datetime
 import time
-import pytz
 from contextlib import contextmanager
 
 # Load environment variables
@@ -674,19 +673,6 @@ class SubscriptionManager:
         
         return {"emails": emails, "total": total}
 
-    def get_unique_domains(self):
-        """Get list of unique sender domains with email counts"""
-        with self.db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT sender_domain, COUNT(*) as count 
-                FROM processed_emails 
-                WHERE sender_domain IS NOT NULL AND sender_domain != ''
-                GROUP BY sender_domain 
-                ORDER BY count DESC
-            ''')
-            domains = [{'domain': row[0], 'count': row[1]} for row in cursor.fetchall()]
-        return domains
 
     def reset_database(self):
         """Clear all data and force fresh authentication"""
@@ -696,54 +682,6 @@ class SubscriptionManager:
             cursor.execute('DELETE FROM connections')
             conn.commit()
         print("Database reset complete - fresh authentication required")
-    
-    def parse_llm_notes(self):
-        """Parse llm_notes.md file and extract subscription data for review UI"""
-        try:
-            with open('resources/llm_notes.md', 'r') as f:
-                content = f.read()
-        except FileNotFoundError:
-            return []
-        
-        subscriptions = []
-        lines = content.split('\n')
-        current_subscription = None
-        
-        for line in lines:
-            line = line.strip()
-            
-            # Look for subscription names (lines starting with **)
-            if line.startswith('**') and line.endswith('**'):
-                if current_subscription:
-                    subscriptions.append(current_subscription)
-                
-                # Extract name between ** markers
-                name = line[2:-2].strip()
-                current_subscription = {
-                    'name': name,
-                    'user_checked': None,
-                    'user_notes': ''
-                }
-            
-            # Look for user check status
-            elif line.startswith('User Check:') and current_subscription:
-                if '[x] Yes' in line:
-                    current_subscription['user_checked'] = True
-                elif '[x] No' in line:
-                    current_subscription['user_checked'] = False
-                # else remains None (unchecked)
-            
-            # Look for user notes
-            elif line.startswith('User Notes:') and current_subscription:
-                # Extract text after "User Notes: "
-                notes_text = line[12:].strip()
-                current_subscription['user_notes'] = notes_text
-        
-        # Don't forget the last subscription
-        if current_subscription:
-            subscriptions.append(current_subscription)
-        
-        return subscriptions
     
     def update_llm_notes(self, subscription_updates):
         """Update llm_notes.md file with user check/notes data"""
@@ -1255,16 +1193,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             </div>
         </div>
         '''
-
-
-    
-    
-
-
-
-    
-    
-
     def _generate_notepad_markdown(self, subscriptions, other_notes):
         """Generate markdown content from notepad sections"""
         lines = ["## Subscriptions"]
@@ -1727,21 +1655,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_json_response(result, status=200 if result["success"] else 400)
 
 
-    def format_datetime_nz(self, iso_datetime_str):
-        """Convert ISO datetime to New Zealand timezone for display"""
-        try:
-            # Parse the ISO datetime (with timezone)
-            dt = datetime.fromisoformat(iso_datetime_str.replace('Z', '+00:00'))
-            # Convert to New Zealand timezone
-            nz_tz = pytz.timezone('Pacific/Auckland')
-            nz_dt = dt.astimezone(nz_tz)
-            # Format for display
-            formatted = nz_dt.strftime('%d %b %Y %I:%M%p')
-            # Remove leading zero from hour and fix am/pm case
-            formatted = re.sub(r' 0(\d):', r' \1:', formatted)
-            return formatted.replace('AM', 'am').replace('PM', 'pm')
-        except (ValueError, AttributeError):
-            return iso_datetime_str
 
     def handle_reset(self):
         """Reset database"""

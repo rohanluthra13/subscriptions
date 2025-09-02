@@ -346,9 +346,45 @@
     }
     
     function saveSubscriptionChanges(element) {
-        showSaveIndicator();
+        showSaveIndicator('Saving...');
         calculateTotals();
-        // TODO: Implement actual saving to server
+        
+        // Get subscription data from the element
+        const row = element.closest('tr');
+        const subscriptionId = row.dataset.subscriptionId;
+        const field = element.dataset.field;
+        let value = element.textContent.trim();
+        
+        // Handle select elements
+        if (element.tagName.toLowerCase() === 'select') {
+            value = element.value;
+        }
+        
+        // Send update to server
+        fetch('/api/subscriptions/update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                id: subscriptionId,
+                field: field,
+                value: value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSaveIndicator('Changes saved');
+            } else {
+                showSaveIndicator('Error: ' + data.error);
+                console.error('Save error:', data.error);
+            }
+        })
+        .catch(error => {
+            showSaveIndicator('Save failed');
+            console.error('Network error:', error);
+        });
     }
     
     function showSaveIndicator(message = 'Changes saved') {
@@ -400,10 +436,79 @@
     }
     
     function toggleExpandRow(button) {
-        // TODO: Implement toggle expand row functionality
+        // Toggle the expanded class on the button
+        button.classList.toggle('expanded');
+        
+        // Get the current row
+        const currentRow = button.closest('tr');
+        const subscriptionId = currentRow.dataset.subscriptionId;
+        
+        // Check if expanded details already exist
+        let expandedRow = currentRow.nextElementSibling;
+        if (expandedRow && expandedRow.classList.contains('expanded-details')) {
+            // Already exists, just toggle visibility
+            if (expandedRow.style.display === 'none') {
+                expandedRow.style.display = '';
+            } else {
+                expandedRow.style.display = 'none';
+            }
+        } else {
+            // Create new expanded row
+            expandedRow = document.createElement('tr');
+            expandedRow.className = 'expanded-details';
+            
+            const expandedCell = document.createElement('td');
+            expandedCell.colSpan = 7;
+            
+            expandedCell.innerHTML = `
+                <div class="expanded-content">
+                    <div class="detail-group">
+                        <div class="detail-label">Notes</div>
+                        <div class="detail-value" contenteditable="true" data-field="notes" 
+                             onblur="saveSubscriptionChanges(this)">
+                        </div>
+                    </div>
+                    <div class="detail-group">
+                        <div class="detail-label">Next Billing Date</div>
+                        <div class="detail-value" contenteditable="true" data-field="next_billing_date" 
+                             onblur="saveSubscriptionChanges(this)">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            expandedRow.appendChild(expandedCell);
+            currentRow.parentNode.insertBefore(expandedRow, currentRow.nextSibling);
+        }
     }
     
     function addNewSubscription() {
-        // TODO: Implement add new subscription functionality
+        // Send request to create new subscription
+        fetch('/api/subscriptions/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: 'New Subscription',
+                cost: 0,
+                billing_cycle: 'monthly'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload the page to show the new subscription
+                // In a more complex app, we'd dynamically add the row
+                location.reload();
+            } else {
+                showSaveIndicator('Error: ' + data.error);
+                console.error('Create error:', data.error);
+            }
+        })
+        .catch(error => {
+            showSaveIndicator('Create failed');
+            console.error('Network error:', error);
+        });
     }
 </script>

@@ -592,6 +592,112 @@ class SubscriptionManager:
                 return []  # Return empty list to allow page to render
             raise  # Re-raise other operational errors
 
+    def update_subscription(self, subscription_id, field, value):
+        """Update a single field of a subscription"""
+        try:
+            with self.db_connection(timeout=5.0) as conn:
+                cursor = conn.cursor()
+                
+                # Validate field name for security
+                valid_fields = ['name', 'category', 'cost', 'currency', 'billing_cycle', 
+                               'status', 'auto_renewing', 'next_billing_date', 'notes']
+                if field not in valid_fields:
+                    raise ValueError(f"Invalid field: {field}")
+                
+                # Handle boolean conversion for auto_renewing
+                if field == 'auto_renewing':
+                    value = bool(int(value)) if value in ['0', '1'] else bool(value)
+                
+                # Update the field and set updated_at timestamp
+                cursor.execute(f'''
+                    UPDATE subscriptions 
+                    SET {field} = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                ''', (value, subscription_id))
+                
+                conn.commit()
+                
+                # Check if the update actually affected a row
+                if cursor.rowcount == 0:
+                    raise ValueError(f"Subscription with id {subscription_id} not found")
+                    
+                return True
+                
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"Database timeout/lock in update_subscription: {e}")
+                raise
+            raise
+
+    def create_subscription(self, data=None):
+        """Create a new subscription with default or provided values"""
+        try:
+            with self.db_connection(timeout=5.0) as conn:
+                cursor = conn.cursor()
+                
+                # Set defaults if no data provided
+                if data is None:
+                    data = {}
+                
+                # Use provided values or defaults
+                name = data.get('name', 'New Subscription')
+                category = data.get('category', '')
+                cost = data.get('cost', 0.00)
+                currency = data.get('currency', 'USD')
+                billing_cycle = data.get('billing_cycle', 'monthly')
+                status = data.get('status', 'active')
+                auto_renewing = data.get('auto_renewing', True)
+                notes = data.get('notes', '')
+                
+                cursor.execute('''
+                    INSERT INTO subscriptions 
+                    (name, category, cost, currency, billing_cycle, status, auto_renewing, notes, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user')
+                ''', (name, category, cost, currency, billing_cycle, status, auto_renewing, notes))
+                
+                conn.commit()
+                
+                # Get the ID of the newly created subscription
+                subscription_id = cursor.lastrowid
+                
+                # Fetch and return the complete subscription record
+                cursor.execute('SELECT * FROM subscriptions WHERE rowid = ?', (subscription_id,))
+                columns = [desc[0] for desc in cursor.description]
+                row = cursor.fetchone()
+                
+                return dict(zip(columns, row)) if row else None
+                
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed: subscriptions.name" in str(e):
+                raise ValueError("A subscription with this name already exists")
+            raise
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"Database timeout/lock in create_subscription: {e}")
+                raise
+            raise
+
+    def delete_subscription(self, subscription_id):
+        """Delete a subscription by ID"""
+        try:
+            with self.db_connection(timeout=5.0) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('DELETE FROM subscriptions WHERE id = ?', (subscription_id,))
+                conn.commit()
+                
+                # Check if the delete actually affected a row
+                if cursor.rowcount == 0:
+                    raise ValueError(f"Subscription with id {subscription_id} not found")
+                    
+                return True
+                
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"Database timeout/lock in delete_subscription: {e}")
+                raise
+            raise
+
     def get_email_count(self):
         """Get total count of processed emails with timeout handling"""
         try:
@@ -797,6 +903,12 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_api_fetch()
         elif path == '/api/fetch_email_content':
             self.handle_api_fetch_content()
+        elif path == '/api/subscriptions/update':
+            self.handle_subscription_update()
+        elif path == '/api/subscriptions/create':
+            self.handle_subscription_create()
+        elif path == '/api/subscriptions/delete':
+            self.handle_subscription_delete()
         else:
             self.send_error(404)
 
@@ -1313,6 +1425,126 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.send_response(302)
         self.send_header('Location', auth_url)
         self.end_headers()
+
+    def handle_subscription_update(self):
+        """Handle subscription update requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(post_data)
+            
+            subscription_id = data.get('id')
+            field = data.get('field')
+            value = data.get('value')
+            
+            if not all([subscription_id, field]):
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {'success': False, 'error': 'Missing required fields: id, field'}
+                self.wfile.write(json.dumps(response).encode())
+                return
+            
+            # Update the subscription
+            success = self.sm.update_subscription(subscription_id, field, value)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': True, 'message': 'Subscription updated successfully'}
+            self.wfile.write(json.dumps(response).encode())
+            
+        except ValueError as e:
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': False, 'error': str(e)}
+            self.wfile.write(json.dumps(response).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': False, 'error': f'Server error: {str(e)}'}
+            self.wfile.write(json.dumps(response).encode())
+
+    def handle_subscription_create(self):
+        """Handle subscription creation requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(post_data) if post_data.strip() else {}
+            
+            # Create the subscription
+            new_subscription = self.sm.create_subscription(data)
+            
+            if new_subscription:
+                self.send_response(201)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {
+                    'success': True, 
+                    'message': 'Subscription created successfully',
+                    'subscription': new_subscription
+                }
+                self.wfile.write(json.dumps(response).encode())
+            else:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {'success': False, 'error': 'Failed to create subscription'}
+                self.wfile.write(json.dumps(response).encode())
+                
+        except ValueError as e:
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': False, 'error': str(e)}
+            self.wfile.write(json.dumps(response).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': False, 'error': f'Server error: {str(e)}'}
+            self.wfile.write(json.dumps(response).encode())
+
+    def handle_subscription_delete(self):
+        """Handle subscription deletion requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(post_data)
+            
+            subscription_id = data.get('id')
+            
+            if not subscription_id:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {'success': False, 'error': 'Missing required field: id'}
+                self.wfile.write(json.dumps(response).encode())
+                return
+            
+            # Delete the subscription
+            success = self.sm.delete_subscription(subscription_id)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': True, 'message': 'Subscription deleted successfully'}
+            self.wfile.write(json.dumps(response).encode())
+            
+        except ValueError as e:
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': False, 'error': str(e)}
+            self.wfile.write(json.dumps(response).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': False, 'error': f'Server error: {str(e)}'}
+            self.wfile.write(json.dumps(response).encode())
 
     def handle_oauth_callback(self, params):
         """Handle OAuth callback from Gmail"""

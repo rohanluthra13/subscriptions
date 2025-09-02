@@ -26,21 +26,23 @@ rm subscriptions.db
 
 ## Current Architecture
 
-**Single-file Python app** (`main.py` - ~1100 lines)
+**Single-file Python app** (`main.py` - ~1900 lines)
 - SQLite database for local storage
 - Gmail API integration with OAuth
 - Multi-threaded HTTP server with background jobs
-- Simple web UI for viewing results
+- Modern SPA-style web UI with smooth navigation
 - MCP server integration for AI agent interaction
 - Domain-based subscription detection
 
-**Agent-First Development Philosophy**
-- Single-file architecture optimized for AI agents (Claude Code)
-- Everything in `main.py` for complete context in one read
-- Templates with inline styles/JS to reduce cross-file coordination
-- String-based HTML generation for explicit, traceable rendering
-- No build steps or complex frameworks that obscure logic
-- Note: As complexity grows, we'll modularize strategically while maintaining agent-friendly patterns
+**Architecture Philosophy: "HTML Over The Wire" + Agent-First**
+- **Server-side rendering**: Python builds complete HTML using templates
+- **Minimal JavaScript**: Just enough for smooth SPA-like navigation (~500-800 lines)
+- **Template-based presentation**: Clean separation of data preparation and UI rendering
+- **Progressive enhancement**: Works without JavaScript, enhanced with it
+- **Single-file simplicity**: Everything in `main.py` for complete AI agent context
+- **No complex frameworks**: Avoids React/Angular complexity while achieving modern UX
+
+**Architectural Alignment**: Similar to Basecamp's Turbo approach - server handles business logic and HTML generation, minimal client-side JavaScript manages navigation and interactions.
 
 **MCP Integration** (active - see `mcp_server.py`)
 - Expose subscription data via MCP protocol  
@@ -52,11 +54,20 @@ rm subscriptions.db
 
 ```
 /
-├── main.py              # Complete application (~1000 lines)
+├── main.py              # Complete application (~1900 lines)
 ├── requirements.txt     # Python dependencies  
 ├── subscriptions.db     # SQLite database (auto-created)
 ├── .env                # Environment variables
-├── docs/               # MCP migration planning
+├── templates/          # HTML Over The Wire templates
+│   ├── base.html       # SPA shell with navigation and core JS
+│   └── views/          # View fragments loaded via AJAX
+│       ├── home.html   # Summary dashboard
+│       ├── manage.html # Subscription management
+│       ├── emails.html # Gmail integration
+│       ├── review.html # LLM findings review
+│       └── notepad.html# User notes
+├── docs/               # Architecture documentation
+│   ├── #LLMbriefs/     # Agent review documents
 │   ├── manifesto.md    # Project philosophy
 │   ├── product.md      # MCP product specs
 │   └── technical.md    # Technical approach
@@ -82,15 +93,25 @@ OPENAI_MODEL=gpt-4o-mini
 2. **Domain Clustering**: Groups emails by sender domain 
 3. **LLM Analysis**: AI analyzes patterns and writes findings to `resources/llm_notes.md`
 4. **User Review**: Interactive UI at `/?view=review` for confirming/rejecting findings
-5. **Local Storage**: All data stays in local SQLite database
+5. **Subscription Management**: Full CRUD operations with inline editing at `/?view=manage`
+6. **Local Storage**: All data stays in local SQLite database
 
 ## Development Notes
 
-- Single-file architecture - everything in `main.py` 
-- Direct SQL queries - no ORM complexity
-- Multi-threaded HTTP server with background job management
-- Local-first - works offline except for API calls
-- MCP server enables AI agent integration
+**Architecture Principles:**
+- **"HTML Over The Wire"**: Server renders HTML, minimal JS handles navigation
+- **Single-file main logic**: Core business logic in `main.py` for AI agent comprehension
+- **Template-driven UI**: Clean separation between data preparation and presentation
+- **Progressive enhancement**: Functional without JS, smooth with JS enabled
+- **Direct SQL**: No ORM complexity, explicit database operations
+- **Multi-threaded server**: Background job management for long-running operations
+- **Local-first**: Works offline except for Gmail/OpenAI API calls
+
+**Maintenance Philosophy:**
+- Keep server-side logic simple and traceable
+- Avoid complex client-side state management
+- Use JavaScript for navigation/UX, not business logic
+- Maintain agent-friendly single-file approach while using templates for presentation
 
 ## Key Database Tables
 

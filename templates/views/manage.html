@@ -1,22 +1,6 @@
 <div class="manage-container">
     <h2>Manage Subscriptions</h2>
     
-    <!-- Summary cards -->
-    <div class="summary-cards">
-        <div class="summary-card">
-            <div class="summary-value">$<span id="monthly-total">{{monthly_total}}</span></div>
-            <div class="summary-label">Monthly</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-value">$<span id="yearly-total">{{yearly_total}}</span></div>
-            <div class="summary-label">Yearly</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-value"><span id="active-count">{{active_count}}</span></div>
-            <div class="summary-label">Active</div>
-        </div>
-    </div>
-    
     <!-- Subscriptions table -->
     <div class="table-container">
         <table id="manage-table">
@@ -47,35 +31,6 @@
     /* Container styles */
     .manage-container {
         max-width: 1200px;
-    }
-    
-    /* Summary cards */
-    .summary-cards {
-        display: flex;
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-    
-    .summary-card {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        min-width: 150px;
-    }
-    
-    .summary-value {
-        font-size: 28px;
-        font-weight: 600;
-        color: #1a73e8;
-        margin-bottom: 5px;
-    }
-    
-    .summary-label {
-        font-size: 13px;
-        color: #666;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
     }
     
     /* Table container */
@@ -303,8 +258,6 @@
             document.body.appendChild(saveIndicator);
         }
         
-        calculateTotals();
-        
         // Handle contenteditable cells
         const editableCells = document.querySelectorAll('.editable-cell');
         editableCells.forEach(cell => {
@@ -347,7 +300,6 @@
     
     function saveSubscriptionChanges(element) {
         showSaveIndicator('Saving...');
-        calculateTotals();
         
         // Get subscription data from the element
         const row = element.closest('tr');
@@ -397,42 +349,6 @@
                 indicator.style.display = 'none';
             }, 2000);
         }
-    }
-    
-    function calculateTotals() {
-        let monthlyTotal = 0;
-        let yearlyTotal = 0;
-        let activeCount = 0;
-        
-        document.querySelectorAll('#subscription-rows tr:not(.add-row):not(.expanded-details)').forEach(row => {
-            const costField = row.querySelector('[data-field="cost"]');
-            const cycleField = row.querySelector('[data-field="billing_cycle"]');
-            
-            if (costField && cycleField) {
-                const cost = parseFloat(costField.textContent) || 0;
-                const cycle = cycleField.textContent.toLowerCase();
-                
-                if (cost > 0) {
-                    activeCount++;
-                    
-                    if (cycle === 'monthly') {
-                        monthlyTotal += cost;
-                        yearlyTotal += cost * 12;
-                    } else if (cycle === 'yearly' || cycle === 'annual') {
-                        yearlyTotal += cost;
-                        monthlyTotal += cost / 12;
-                    }
-                }
-            }
-        });
-        
-        const monthlyEl = document.getElementById('monthly-total');
-        const yearlyEl = document.getElementById('yearly-total');
-        const activeEl = document.getElementById('active-count');
-        
-        if (monthlyEl) monthlyEl.textContent = monthlyTotal.toFixed(2);
-        if (yearlyEl) yearlyEl.textContent = yearlyTotal.toFixed(2);
-        if (activeEl) activeEl.textContent = activeCount;
     }
     
     function toggleExpandRow(button) {

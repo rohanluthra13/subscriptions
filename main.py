@@ -1008,25 +1008,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         """Generate content for manage view with all data"""
         subscriptions = self.sm.get_subscriptions()
         
-        # Calculate totals
-        monthly_total = 0
-        yearly_total = 0
-        active_count = 0
-        
-        for sub in subscriptions:
-            cost = float(sub.get('cost', 0) or 0)
-            cycle = (sub.get('billing_cycle', '') or '').lower()
-            status = (sub.get('status', '') or '').lower()
-            
-            if status == 'active' and cost > 0:
-                active_count += 1
-                if cycle == 'monthly':
-                    monthly_total += cost
-                    yearly_total += cost * 12
-                elif cycle in ['yearly', 'annual']:
-                    yearly_total += cost
-                    monthly_total += cost / 12
-        
         # Generate subscription rows
         subscription_rows = ""
         for sub in subscriptions:
@@ -1049,9 +1030,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             </tr>'''
         
         return self.render_template('views/manage.html',
-            monthly_total=f"{monthly_total:.2f}",
-            yearly_total=f"{yearly_total:.2f}",
-            active_count=str(active_count),
             subscription_rows=subscription_rows
         )
     

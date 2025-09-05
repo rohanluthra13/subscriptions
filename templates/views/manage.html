@@ -1,430 +1,71 @@
 <div class="manage-container">
     <h2>Manage Subscriptions</h2>
     
-    <!-- Subscriptions table -->
-    <div class="table-container">
-        <table id="manage-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th>Status</th>
-                    <th>Auto-Renew</th>
-                    <th>Cost</th>
-                    <th>Cycle</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody id="subscription-rows">
-                {{subscription_rows}}
-                <tr class="add-row">
-                    <td colspan="7">
-                        <button class="add-btn">+ Add Subscription</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <!-- Subscription cards -->
+    <div class="cards-container" id="subscription-cards">
+        {{subscription_cards}}
     </div>
 </div>
 
 <style>
     /* Container styles */
     .manage-container {
-        max-width: 1200px;
-    }
-    
-    /* Table container */
-    .table-container {
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        overflow: hidden;
-    }
-    
-    /* Override global table styles for this view */
-    #manage-table {
-        box-shadow: none;
-        border-radius: 0;
-    }
-    
-    /* Editable cell styles */
-    .editable-cell {
-        padding: 12px 16px;
-        cursor: text;
-        min-height: 20px;
-        position: relative;
-    }
-    
-    .editable-cell:hover {
-        background-color: #f8f9fa;
-    }
-    
-    .editable-cell:focus {
-        outline: 2px solid #1a73e8;
-        outline-offset: -2px;
-        background-color: white;
-    }
-    
-    /* Select dropdown styling */
-    .editable-select {
-        border: none;
-        background: transparent;
-        font-family: inherit;
-        font-size: inherit;
-        color: inherit;
-        cursor: pointer;
-        padding: 12px 16px;
         width: 100%;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        appearance: none;
     }
     
-    .editable-select:hover {
-        background-color: #f8f9fa;
+    /* Cards container */
+    .cards-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
     }
     
-    .editable-select:focus {
-        outline: 2px solid #1a73e8;
-        outline-offset: -2px;
-        background-color: white;
+    /* Individual subscription card */
+    .subscription-card {
+        padding: 20px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: box-shadow 0.2s ease;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
     
-    /* Status badges */
-    .status-badge {
-        display: inline-block;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
+    .subscription-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .card-name {
+        font-size: 16px;
+        font-weight: 500;
+        color: #333;
+    }
+    
+    .card-details {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #666;
+        font-size: 14px;
+    }
+    
+    .card-cost {
         font-weight: 500;
     }
     
-    .status-active {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    
-    .status-cancelled {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-    
-    .status-trial {
-        background-color: #fff3cd;
-        color: #856404;
-    }
-    
-    /* Expand/collapse button */
-    .expand-btn {
-        background: none;
-        border: none;
-        color: #666;
-        cursor: pointer;
-        font-size: 18px;
-        padding: 5px;
-        transition: transform 0.2s ease;
-    }
-    
-    .expand-btn:hover {
-        color: #1a73e8;
-    }
-    
-    .expand-btn.expanded {
-        transform: rotate(45deg);
-    }
-    
-    /* Expanded row details */
-    .expanded-details {
-        background-color: #f8f9fa;
-        border-top: 1px solid #e0e0e0;
-    }
-    
-    .expanded-content {
-        padding: 20px;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-    }
-    
-    .detail-group {
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .detail-label {
-        font-size: 12px;
-        color: #666;
-        margin-bottom: 5px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .detail-value {
-        font-size: 14px;
-        padding: 8px;
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 4px;
-        min-height: 36px;
-    }
-    
-    .detail-value[contenteditable]:focus {
-        outline: 2px solid #1a73e8;
-        outline-offset: -2px;
-    }
-    
-    /* Add new row */
-    .add-row {
-        background-color: transparent;
-    }
-    
-    .add-row td {
-        padding: 20px;
-        text-align: center;
-        border-bottom: none;
-    }
-    
-    .add-btn {
-        background: #1a73e8;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: background 0.2s ease;
-        margin: 0;
-    }
-    
-    .add-btn:hover {
-        background: #1557b0;
-    }
-    
-    /* Delete button */
-    .delete-btn {
-        background: none;
-        border: none;
-        color: #dc3545;
-        cursor: pointer;
-        padding: 5px 10px;
-        font-size: 12px;
-        transition: opacity 0.2s ease;
-    }
-    
-    .delete-btn:hover {
-        opacity: 0.7;
-    }
-    
-    /* Placeholder text for empty cells */
-    .editable-cell:empty::before {
-        content: attr(data-placeholder);
+    .card-cycle {
         color: #999;
-        font-style: italic;
-    }
-    
-    /* Save indicator */
-    .save-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: #28a745;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 4px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        display: none;
-        animation: slideIn 0.3s ease;
-    }
-    
-    @keyframes slideIn {
-        from {
-            transform: translateY(100px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
     }
 </style>
 
 <script>
     function initializeSubscriptionManager() {
-        // Add save indicator element to the page
-        if (!document.querySelector('.save-indicator')) {
-            const saveIndicator = document.createElement('div');
-            saveIndicator.className = 'save-indicator';
-            saveIndicator.textContent = 'Changes saved';
-            document.body.appendChild(saveIndicator);
-        }
-        
-        // Handle contenteditable cells
-        const editableCells = document.querySelectorAll('.editable-cell');
-        editableCells.forEach(cell => {
-            cell.addEventListener('blur', function() {
-                saveSubscriptionChanges(this);
-            });
-            
-            cell.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.blur();
-                }
-            });
-        });
-        
-        // Handle select dropdowns
-        const selects = document.querySelectorAll('.editable-select');
-        selects.forEach(select => {
-            select.addEventListener('change', function() {
-                saveSubscriptionChanges(this);
-            });
-        });
-        
-        // Handle expand buttons
-        const expandBtns = document.querySelectorAll('.expand-btn');
-        expandBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                toggleExpandRow(this);
-            });
-        });
-        
-        // Handle add new subscription button
-        const addBtn = document.querySelector('.add-btn');
-        if (addBtn) {
-            addBtn.addEventListener('click', function() {
-                addNewSubscription();
-            });
-        }
-    }
-    
-    function saveSubscriptionChanges(element) {
-        showSaveIndicator('Saving...');
-        
-        // Get subscription data from the element
-        const row = element.closest('tr');
-        const subscriptionId = row.dataset.subscriptionId;
-        const field = element.dataset.field;
-        let value = element.textContent.trim();
-        
-        // Handle select elements
-        if (element.tagName.toLowerCase() === 'select') {
-            value = element.value;
-        }
-        
-        // Send update to server
-        fetch('/api/subscriptions/update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                id: subscriptionId,
-                field: field,
-                value: value
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showSaveIndicator('Changes saved');
-            } else {
-                showSaveIndicator('Error: ' + data.error);
-                console.error('Save error:', data.error);
-            }
-        })
-        .catch(error => {
-            showSaveIndicator('Save failed');
-            console.error('Network error:', error);
-        });
-    }
-    
-    function showSaveIndicator(message = 'Changes saved') {
-        const indicator = document.querySelector('.save-indicator');
-        if (indicator) {
-            indicator.textContent = message;
-            indicator.style.display = 'block';
-            
-            setTimeout(() => {
-                indicator.style.display = 'none';
-            }, 2000);
-        }
-    }
-    
-    function toggleExpandRow(button) {
-        // Toggle the expanded class on the button
-        button.classList.toggle('expanded');
-        
-        // Get the current row
-        const currentRow = button.closest('tr');
-        const subscriptionId = currentRow.dataset.subscriptionId;
-        
-        // Check if expanded details already exist
-        let expandedRow = currentRow.nextElementSibling;
-        if (expandedRow && expandedRow.classList.contains('expanded-details')) {
-            // Already exists, just toggle visibility
-            if (expandedRow.style.display === 'none') {
-                expandedRow.style.display = '';
-            } else {
-                expandedRow.style.display = 'none';
-            }
-        } else {
-            // Create new expanded row
-            expandedRow = document.createElement('tr');
-            expandedRow.className = 'expanded-details';
-            
-            const expandedCell = document.createElement('td');
-            expandedCell.colSpan = 7;
-            
-            expandedCell.innerHTML = `
-                <div class="expanded-content">
-                    <div class="detail-group">
-                        <div class="detail-label">Notes</div>
-                        <div class="detail-value" contenteditable="true" data-field="notes" 
-                             onblur="saveSubscriptionChanges(this)">
-                        </div>
-                    </div>
-                    <div class="detail-group">
-                        <div class="detail-label">Next Billing Date</div>
-                        <div class="detail-value" contenteditable="true" data-field="next_billing_date" 
-                             onblur="saveSubscriptionChanges(this)">
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            expandedRow.appendChild(expandedCell);
-            currentRow.parentNode.insertBefore(expandedRow, currentRow.nextSibling);
-        }
-    }
-    
-    function addNewSubscription() {
-        // Send request to create new subscription
-        fetch('/api/subscriptions/create', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name: 'New Subscription',
-                cost: 0,
-                billing_cycle: 'monthly'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Reload the page to show the new subscription
-                // In a more complex app, we'd dynamically add the row
-                location.reload();
-            } else {
-                showSaveIndicator('Error: ' + data.error);
-                console.error('Create error:', data.error);
-            }
-        })
-        .catch(error => {
-            showSaveIndicator('Create failed');
-            console.error('Network error:', error);
+        // Minimal initialization for card view
+        // Cards will be clickable in future for editing
+        const cards = document.querySelectorAll('.subscription-card');
+        cards.forEach(card => {
+            // Future: Add click handler to open edit form
         });
     }
 </script>

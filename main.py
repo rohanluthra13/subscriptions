@@ -1008,29 +1008,32 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         """Generate content for manage view with all data"""
         subscriptions = self.sm.get_subscriptions()
         
-        # Generate subscription rows
-        subscription_rows = ""
+        # Generate subscription cards
+        subscription_cards = ""
         for sub in subscriptions:
-            subscription_rows += f'''
-            <tr data-subscription-id="{sub.get('id', '')}">
-                <td class="editable-cell" contenteditable="true" data-field="name">{sub['name']}</td>
-                <td class="editable-cell" contenteditable="true" data-field="category">{sub.get('category', '') or ''}</td>
-                <td><span class="status-badge status-active">{sub.get('status', 'active')}</span></td>
-                <td>
-                    <select name="auto_renewing" class="editable-select">
-                        <option value="1" {'selected' if sub.get('auto_renewing') else ''}>Yes</option>
-                        <option value="0" {'selected' if not sub.get('auto_renewing') else ''}>No</option>
-                    </select>
-                </td>
-                <td class="editable-cell" contenteditable="true" data-field="cost">{sub.get('cost', '') or ''}</td>
-                <td class="editable-cell" contenteditable="true" data-field="billing_cycle">{sub.get('billing_cycle', '') or ''}</td>
-                <td style="text-align: center;">
-                    <button class="expand-btn" data-subscription-id="{sub.get('id', '')}">+</button>
-                </td>
-            </tr>'''
+            # Format cost with currency symbol
+            cost = sub.get('cost', '')
+            if cost:
+                # Remove any existing $ symbol if present
+                cost_str = str(cost).replace('$', '')
+                cost_display = f"${cost_str}"
+            else:
+                cost_display = "$0"
+            
+            # Get billing cycle
+            cycle = sub.get('billing_cycle', 'monthly')
+            
+            subscription_cards += f'''
+            <div class="subscription-card" data-subscription-id="{sub.get('id', '')}">
+                <div class="card-name">{sub['name']}</div>
+                <div class="card-details">
+                    <span class="card-cost">{cost_display}</span>
+                    <span class="card-cycle">{cycle}</span>
+                </div>
+            </div>'''
         
         return self.render_template('views/manage.html',
-            subscription_rows=subscription_rows
+            subscription_cards=subscription_cards
         )
     
     def get_emails_content(self):

@@ -12,42 +12,43 @@
         
         /* Main container */
         .container { 
-            display: flex; 
             height: 100vh; 
         }
         
-        /* Icon sidebar */
+        /* Floating navigation */
         .sidebar {
-            width: 200px;
-            background: transparent;
+            position: fixed;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
             display: flex;
             flex-direction: column;
-            padding-top: 180px;
-            position: relative;
-            z-index: 100;
+            padding: 12px 8px;
+            z-index: 1000;
         }
         
         /* Navigation items */
         .nav-item {
             display: flex;
             align-items: center;
-            height: 60px;
-            padding: 0 20px;
+            justify-content: center;
+            height: 44px;
+            width: 44px;
             text-decoration: none;
-            color: #333;
+            color: #666;
             position: relative;
-            transition: color 0.2s ease;
-            overflow: hidden;
-            white-space: nowrap;
+            transition: all 0.3s ease;
+            border-radius: 12px;
             cursor: pointer;
+            margin: 4px 0;
         }
         
         .nav-item:hover {
-            color: #666;
+            transform: scale(1.05);
         }
         
         .nav-item.active {
-            color: #1a73e8;
+            color: #333;
         }
         
         /* Icons and labels */
@@ -58,31 +59,32 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            transition: transform 0.2s ease;
         }
         
         .nav-icon svg {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             stroke: currentColor;
             fill: none;
             stroke-width: 2;
         }
         
-        .nav-item:hover .nav-icon {
-            transform: scale(1.2);
-        }
-        
         .nav-label {
-            margin-left: 20px;
-            font-size: 14px;
+            position: absolute;
+            left: 45px;
+            color: #666;
+            font-size: 13px;
+            white-space: nowrap;
             opacity: 0;
-            transition: opacity 0.2s ease;
             pointer-events: none;
+            transform: translateX(-10px);
+            transition: all 0.3s ease;
+            z-index: 1001;
         }
         
         .nav-item:hover .nav-label {
             opacity: 1;
+            transform: translateX(0);
         }
         
         /* Divider - hidden */
@@ -92,9 +94,13 @@
         
         /* Main content area */
         .main-content {
-            flex: 1;
+            width: 100%;
+            height: 100vh;
             padding: 40px;
+            padding-left: 20%;
+            padding-right: 20%;
             overflow-y: auto;
+            box-sizing: border-box;
         }
         
         .main-content h2 { 

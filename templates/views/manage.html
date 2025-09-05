@@ -5,6 +5,54 @@
     <div class="cards-container" id="subscription-cards">
         {{subscription_cards}}
     </div>
+    
+    <!-- Add subscription button -->
+    <div class="add-button-container">
+        <button class="add-subscription-btn" id="add-btn">+</button>
+    </div>
+</div>
+
+<!-- Modal overlay for subscription form -->
+<div class="modal-overlay" id="subscription-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Add Subscription</h3>
+            <button class="modal-close" id="modal-close">&times;</button>
+        </div>
+        
+        <form id="subscription-form">
+            <input type="hidden" id="subscription-id" name="id">
+            
+            <div class="form-field">
+                <label for="sub-name">name</label>
+                <input type="text" id="sub-name" name="name" required>
+            </div>
+            
+            <div class="form-field">
+                <label for="sub-cost">cost</label>
+                <input type="number" id="sub-cost" name="cost" step="0.01" min="0">
+            </div>
+            
+            <div class="form-field">
+                <label for="sub-currency">currency</label>
+                <input type="text" id="sub-currency" name="currency" placeholder="USD">
+            </div>
+            
+            <div class="form-field">
+                <label for="sub-cycle">billing cycle</label>
+                <input type="text" id="sub-cycle" name="billing_cycle" placeholder="monthly">
+            </div>
+            
+            <div class="form-field">
+                <label for="sub-notes">notes</label>
+                <textarea id="sub-notes" name="notes" rows="3"></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" id="submit-btn">Add</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <style>
@@ -57,15 +105,416 @@
     .card-cycle {
         color: #999;
     }
+    
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+    }
+    
+    .empty-state h3 {
+        margin: 0 0 12px 0;
+        font-size: 18px;
+        font-weight: 500;
+        color: #333;
+    }
+    
+    .empty-state p {
+        margin: 0;
+        font-size: 14px;
+    }
+    
+    /* Add button */
+    .add-button-container {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+    
+    .add-subscription-btn {
+        width: 50px;
+        height: 50px;
+        border: 1px solid #e0e0e0;
+        border-radius: 50%;
+        background: transparent;
+        cursor: pointer;
+        font-size: 24px;
+        color: #666;
+        transition: box-shadow 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .add-subscription-btn:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* Modal overlay */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.3);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .modal-overlay.visible {
+        display: flex;
+    }
+    
+    .modal-content {
+        background: white;
+        width: 80%;
+        max-width: 500px;
+        border-radius: 8px;
+        padding: 0;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        animation: modalSlideIn 0.2s ease;
+    }
+    
+    @keyframes modalSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24px 24px 0 24px;
+        margin-bottom: 24px;
+    }
+    
+    .modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 500;
+        color: #333;
+    }
+    
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #999;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+    }
+    
+    .modal-close:hover {
+        color: #666;
+    }
+    
+    /* Form styling */
+    #subscription-form {
+        padding: 0 24px 24px 24px;
+    }
+    
+    .form-field {
+        margin-bottom: 32px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .form-field label {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 8px;
+        text-transform: lowercase;
+    }
+    
+    .form-field input,
+    .form-field textarea {
+        border: none;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 8px 0;
+        font-size: 16px;
+        background: transparent;
+        outline: none;
+        transition: border-bottom-color 0.2s ease;
+    }
+    
+    .form-field input:focus,
+    .form-field textarea:focus {
+        border-bottom-color: transparent;
+    }
+    
+    .form-field textarea {
+        resize: vertical;
+        min-height: 60px;
+    }
+    
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 32px;
+    }
+    
+    .form-actions button {
+        background: #1a73e8;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s ease;
+        margin: 0;
+    }
+    
+    .form-actions button:hover {
+        background: #1557b0;
+    }
+    
+    /* Toast notification */
+    .toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 4px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        display: none;
+        animation: slideUp 0.3s ease;
+        z-index: 2000;
+    }
+    
+    .toast.error {
+        background: #dc3545;
+    }
+    
+    .toast.success {
+        background: #28a745;
+    }
+    
+    @keyframes slideUp {
+        from {
+            transform: translateX(-50%) translateY(100px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+    }
 </style>
 
 <script>
+    let subscriptionsData = null; // Cache for all subscription data
+    
     function initializeSubscriptionManager() {
-        // Minimal initialization for card view
-        // Cards will be clickable in future for editing
+        const modal = document.getElementById('subscription-modal');
+        const addBtn = document.getElementById('add-btn');
+        const closeBtn = document.getElementById('modal-close');
+        const form = document.getElementById('subscription-form');
+        const modalTitle = document.getElementById('modal-title');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        // Fetch all subscription data on page load
+        fetchSubscriptionsData();
+        
+        // Add subscription button click
+        addBtn.addEventListener('click', () => {
+            openModal('add');
+        });
+        
+        // Card click to edit
         const cards = document.querySelectorAll('.subscription-card');
         cards.forEach(card => {
-            // Future: Add click handler to open edit form
+            card.addEventListener('click', () => {
+                const subscriptionId = card.dataset.subscriptionId;
+                openModal('edit', subscriptionId);
+            });
         });
+        
+        // Close modal handlers
+        closeBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+        
+        // Escape key to close modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('visible')) {
+                closeModal();
+            }
+        });
+        
+        // Form submission
+        form.addEventListener('submit', handleFormSubmit);
+    }
+    
+    async function fetchSubscriptionsData() {
+        try {
+            const response = await fetch('/api/subscriptions');
+            const result = await response.json();
+            if (result.success) {
+                subscriptionsData = result.subscriptions;
+            } else {
+                console.error('Failed to fetch subscriptions:', result.error);
+            }
+        } catch (error) {
+            console.error('Network error fetching subscriptions:', error);
+        }
+    }
+    
+    function openModal(mode, subscriptionId = null) {
+        const modal = document.getElementById('subscription-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const submitBtn = document.getElementById('submit-btn');
+        const form = document.getElementById('subscription-form');
+        
+        // Reset form
+        form.reset();
+        document.getElementById('subscription-id').value = '';
+        
+        if (mode === 'add') {
+            modalTitle.textContent = 'Add Subscription';
+            submitBtn.textContent = 'Add';
+        } else if (mode === 'edit') {
+            modalTitle.textContent = 'Edit Subscription';
+            submitBtn.textContent = 'Save';
+            
+            // Populate form with existing data
+            if (subscriptionId) {
+                populateForm(subscriptionId);
+            }
+        }
+        
+        modal.classList.add('visible');
+        document.getElementById('sub-name').focus();
+    }
+    
+    function closeModal() {
+        const modal = document.getElementById('subscription-modal');
+        modal.classList.remove('visible');
+    }
+    
+    function populateForm(subscriptionId) {
+        if (!subscriptionsData) {
+            console.error('Subscription data not loaded');
+            return;
+        }
+        
+        // Find subscription in cached data
+        const subscription = subscriptionsData.find(sub => sub.id === subscriptionId);
+        if (!subscription) {
+            console.error('Subscription not found:', subscriptionId);
+            return;
+        }
+        
+        // Populate all form fields with complete database data
+        document.getElementById('subscription-id').value = subscriptionId;
+        document.getElementById('sub-name').value = subscription.name || '';
+        
+        // Clean cost field - remove $ symbol if present
+        let costValue = subscription.cost || '';
+        if (typeof costValue === 'string') {
+            costValue = costValue.replace('$', '');
+        }
+        document.getElementById('sub-cost').value = costValue;
+        
+        document.getElementById('sub-currency').value = subscription.currency || '';
+        document.getElementById('sub-cycle').value = subscription.billing_cycle || '';
+        document.getElementById('sub-notes').value = subscription.notes || '';
+    }
+    
+    async function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const subscriptionId = formData.get('id');
+        const isEdit = subscriptionId && subscriptionId.trim() !== '';
+        
+        // Prepare data object - include all fields since modal shows complete data
+        const data = {
+            name: formData.get('name'),
+            cost: formData.get('cost') || null,
+            currency: formData.get('currency') || 'USD',
+            billing_cycle: formData.get('billing_cycle') || null,
+            notes: formData.get('notes') || null
+        };
+        
+        if (isEdit) {
+            data.id = subscriptionId;
+        }
+        
+        try {
+            const endpoint = isEdit ? '/api/subscriptions/update' : '/api/subscriptions/create';
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                closeModal();
+                showToast('Subscription saved successfully', 'success');
+                // Reload the page to show updated data
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast(result.error || 'Failed to save subscription', 'error');
+            }
+        } catch (error) {
+            console.error('Network error:', error);
+            showToast('Failed to save subscription. Please try again.', 'error');
+        }
+    }
+    
+    function showToast(message, type = 'success') {
+        // Remove existing toast if any
+        const existingToast = document.querySelector('.toast');
+        if (existingToast) {
+            existingToast.remove();
+        }
+        
+        // Create new toast
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        // Show toast
+        setTimeout(() => {
+            toast.style.display = 'block';
+        }, 10);
+        
+        // Hide toast after 3 seconds
+        setTimeout(() => {
+            toast.style.display = 'none';
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }, 3000);
     }
 </script>

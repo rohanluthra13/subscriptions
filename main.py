@@ -885,6 +885,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_oauth_callback(params)
         elif path == '/reset':
             self.handle_reset()
+        elif path == '/api/subscriptions':
+            self.handle_subscriptions_list()
         else:
             self.send_error(404)
 
@@ -909,6 +911,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_subscription_create()
         elif path == '/api/subscriptions/delete':
             self.handle_subscription_delete()
+        elif path == '/api/subscriptions':
+            self.handle_subscriptions_list()
         else:
             self.send_error(404)
 
@@ -961,7 +965,16 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             active_count = 0
             
             for sub in subscriptions:
-                cost = float(sub.get('cost', 0) or 0)
+                # Safely parse cost, handling $ signs and invalid values
+                cost_raw = sub.get('cost', 0) or 0
+                try:
+                    if isinstance(cost_raw, str):
+                        cost = float(cost_raw.replace('$', '').strip() or 0)
+                    else:
+                        cost = float(cost_raw)
+                except (ValueError, TypeError):
+                    cost = 0.0
+                    
                 cycle = (sub.get('billing_cycle', '') or '').lower()
                 status = (sub.get('status', '') or '').lower()
                 
@@ -1008,29 +1021,55 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         """Generate content for manage view with all data"""
         subscriptions = self.sm.get_subscriptions()
         
-        # Generate subscription cards
+        # Generate subscription cards or empty state
         subscription_cards = ""
-        for sub in subscriptions:
-            # Format cost with currency symbol
-            cost = sub.get('cost', '')
-            if cost:
-                # Remove any existing $ symbol if present
-                cost_str = str(cost).replace('$', '')
-                cost_display = f"${cost_str}"
-            else:
-                cost_display = "$0"
-            
-            # Get billing cycle
-            cycle = sub.get('billing_cycle', 'monthly')
-            
-            subscription_cards += f'''
-            <div class="subscription-card" data-subscription-id="{sub.get('id', '')}">
-                <div class="card-name">{sub['name']}</div>
-                <div class="card-details">
-                    <span class="card-cost">{cost_display}</span>
-                    <span class="card-cycle">{cycle}</span>
-                </div>
+        
+        if not subscriptions:
+            # Empty state - show message encouraging first subscription
+            subscription_cards = '''
+            <div class="empty-state">
+                <h3>Add your first subscription</h3>
+                <p>Click the + button below to get started</p>
             </div>'''
+        else:
+            for sub in subscriptions:
+                # Handle cost display - show ? if empty or 0
+                cost = sub.get('cost', '')
+                if cost:
+                    # Remove any existing $ symbol and convert to float safely
+                    try:
+                        cost_str = str(cost).replace('$', '').strip()
+                        cost_value = float(cost_str) if cost_str else 0
+                        if cost_value > 0:
+                            cost_display = f"${cost_value}"
+                        else:
+                            cost_display = "?"
+                    except (ValueError, TypeError):
+                        # If conversion fails, show the original value or ?
+                        cost_display = "?"
+                else:
+                    cost_display = "?"
+                
+                # Get billing cycle - show ? if empty
+                cycle = sub.get('billing_cycle', '')
+                if not cycle or cycle.strip() == '':
+                    cycle_display = "?"
+                else:
+                    cycle_display = cycle
+                
+                # If both cost and cycle are unknown, just show ?
+                if cost_display == "?" and cycle_display == "?":
+                    details_display = "?"
+                else:
+                    details_display = f'<span class="card-cost">{cost_display}</span><span class="card-cycle">{cycle_display}</span>'
+                
+                subscription_cards += f'''
+                <div class="subscription-card" data-subscription-id="{sub.get('id', '')}">
+                    <div class="card-name">{sub['name']}</div>
+                    <div class="card-details">
+                        {details_display}
+                    </div>
+                </div>'''
         
         return self.render_template('views/manage.html',
             subscription_cards=subscription_cards
@@ -1415,19 +1454,32 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             data = json.loads(post_data)
             
             subscription_id = data.get('id')
-            field = data.get('field')
-            value = data.get('value')
             
-            if not all([subscription_id, field]):
+            if not subscription_id:
                 self.send_response(400)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                response = {'success': False, 'error': 'Missing required fields: id, field'}
+                response = {'success': False, 'error': 'Missing subscription id'}
                 self.wfile.write(json.dumps(response).encode())
                 return
             
-            # Update the subscription
-            success = self.sm.update_subscription(subscription_id, field, value)
+            # Check if this is a single field update or bulk update
+            if 'field' in data and 'value' in data:
+                # Single field update (original behavior)
+                field = data.get('field')
+                value = data.get('value')
+                success = self.sm.update_subscription(subscription_id, field, value)
+            else:
+                # Bulk update - update multiple fields
+                success = True
+                for field in ['name', 'cost', 'currency', 'billing_cycle', 'notes']:
+                    if field in data:
+                        value = data[field]
+                        # Skip empty values for optional fields
+                        if field == 'name' and not value:
+                            continue  # Name is required, don't update if empty
+                        field_success = self.sm.update_subscription(subscription_id, field, value)
+                        success = success and field_success
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -1486,6 +1538,29 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             response = {'success': False, 'error': f'Server error: {str(e)}'}
+            self.wfile.write(json.dumps(response).encode())
+
+    def handle_subscriptions_list(self):
+        """Handle GET requests for all subscriptions as JSON"""
+        try:
+            subscriptions = self.sm.get_subscriptions()
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            response = {
+                'success': True,
+                'subscriptions': subscriptions
+            }
+            self.wfile.write(json.dumps(response).encode())
+            
+        except Exception as e:
+            print(f"Error fetching subscriptions: {e}")
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {'success': False, 'error': str(e)}
             self.wfile.write(json.dumps(response).encode())
 
     def handle_subscription_delete(self):

@@ -1,14 +1,12 @@
 <div class="manage-container">
-    <h2>Manage Subscriptions</h2>
+    <!-- Add subscription button -->
+    <div class="add-button-container">
+        <button class="add-subscription-btn" id="add-btn">+</button>
+    </div>
     
     <!-- Subscription cards -->
     <div class="cards-container" id="subscription-cards">
         {{subscription_cards}}
-    </div>
-    
-    <!-- Add subscription button -->
-    <div class="add-button-container">
-        <button class="add-subscription-btn" id="add-btn">+</button>
     </div>
 </div>
 
@@ -16,7 +14,6 @@
 <div class="modal-overlay" id="subscription-modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 id="modal-title">Add Subscription</h3>
             <button class="modal-close" id="modal-close">&times;</button>
         </div>
         
@@ -35,12 +32,12 @@
             
             <div class="form-field">
                 <label for="sub-currency">currency</label>
-                <input type="text" id="sub-currency" name="currency" placeholder="USD">
+                <input type="text" id="sub-currency" name="currency">
             </div>
             
             <div class="form-field">
                 <label for="sub-cycle">billing cycle</label>
-                <input type="text" id="sub-cycle" name="billing_cycle" placeholder="monthly">
+                <input type="text" id="sub-cycle" name="billing_cycle">
             </div>
             
             <div class="form-field">
@@ -59,6 +56,7 @@
     /* Container styles */
     .manage-container {
         width: 100%;
+        padding-top: 40px;
     }
     
     /* Cards container */
@@ -129,7 +127,7 @@
     .add-button-container {
         display: flex;
         justify-content: flex-end;
-        margin-top: 20px;
+        margin-bottom: 24px;
     }
     
     .add-subscription-btn {
@@ -141,6 +139,7 @@
         cursor: pointer;
         font-size: 24px;
         color: #666;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         transition: box-shadow 0.2s ease;
         display: flex;
         align-items: center;
@@ -148,7 +147,7 @@
     }
     
     .add-subscription-btn:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     
     /* Modal overlay */
@@ -159,7 +158,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.3);
+        background: rgba(0,0,0,0.8);
         z-index: 1000;
         justify-content: center;
         align-items: center;
@@ -167,16 +166,26 @@
     
     .modal-overlay.visible {
         display: flex;
+        animation: fadeIn 0.8s ease;
+    }
+    
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
     }
     
     .modal-content {
-        background: white;
+        background: #f6f6f6;
         width: 80%;
         max-width: 500px;
-        border-radius: 8px;
+        border-radius: 6px;
         padding: 0;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        animation: modalSlideIn 0.2s ease;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.9);
+        animation: modalSlideIn 0.8s ease;
     }
     
     @keyframes modalSlideIn {
@@ -192,17 +201,10 @@
     
     .modal-header {
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-end;
         align-items: center;
         padding: 24px 24px 0 24px;
         margin-bottom: 24px;
-    }
-    
-    .modal-header h3 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 500;
-        color: #333;
     }
     
     .modal-close {
@@ -231,15 +233,30 @@
     
     .form-field {
         margin-bottom: 32px;
+        position: relative;
         display: flex;
         flex-direction: column;
     }
     
     .form-field label {
-        font-size: 14px;
-        color: #666;
-        margin-bottom: 8px;
+        position: absolute;
+        left: 0;
+        top: 8px;
+        font-size: 16px;
+        color: #999;
         text-transform: lowercase;
+        pointer-events: none;
+        transition: all 0.2s ease;
+        z-index: 1;
+    }
+    
+    .form-field label.active {
+        font-size: 12px;
+        color: #666;
+        right: 0;
+        left: auto;
+        bottom: 2px;
+        top: auto;
     }
     
     .form-field input,
@@ -247,6 +264,7 @@
         border: none;
         border-bottom: 1px solid #e0e0e0;
         padding: 8px 0;
+        padding-right: 60px;
         font-size: 16px;
         background: transparent;
         outline: none;
@@ -255,7 +273,7 @@
     
     .form-field input:focus,
     .form-field textarea:focus {
-        border-bottom-color: transparent;
+        border-bottom-color: #ccc;
     }
     
     .form-field textarea {
@@ -329,8 +347,6 @@
         const addBtn = document.getElementById('add-btn');
         const closeBtn = document.getElementById('modal-close');
         const form = document.getElementById('subscription-form');
-        const modalTitle = document.getElementById('modal-title');
-        const submitBtn = document.getElementById('submit-btn');
         
         // Fetch all subscription data on page load
         fetchSubscriptionsData();
@@ -368,6 +384,54 @@
         form.addEventListener('submit', handleFormSubmit);
     }
     
+    let labelsInitialized = false;
+    
+    function initializeFloatingLabels() {
+        // Only initialize once to avoid duplicate event listeners
+        if (labelsInitialized) {
+            updateFloatingLabelStates();
+            return;
+        }
+        
+        const formFields = document.querySelectorAll('.form-field');
+        
+        formFields.forEach(field => {
+            const input = field.querySelector('input, textarea');
+            const label = field.querySelector('label');
+            
+            if (!input || !label) return;
+            
+            // Single input event handler for all state changes
+            input.addEventListener('input', () => {
+                updateLabelState(input, label);
+            });
+        });
+        
+        labelsInitialized = true;
+        updateFloatingLabelStates();
+    }
+    
+    function updateLabelState(input, label) {
+        if (input.value && input.value.trim()) {
+            label.classList.add('active');
+        } else {
+            label.classList.remove('active');
+        }
+    }
+    
+    function updateFloatingLabelStates() {
+        const formFields = document.querySelectorAll('.form-field');
+        
+        formFields.forEach(field => {
+            const input = field.querySelector('input, textarea');
+            const label = field.querySelector('label');
+            
+            if (!input || !label) return;
+            
+            updateLabelState(input, label);
+        });
+    }
+    
     async function fetchSubscriptionsData() {
         try {
             const response = await fetch('/api/subscriptions');
@@ -384,7 +448,6 @@
     
     function openModal(mode, subscriptionId = null) {
         const modal = document.getElementById('subscription-modal');
-        const modalTitle = document.getElementById('modal-title');
         const submitBtn = document.getElementById('submit-btn');
         const form = document.getElementById('subscription-form');
         
@@ -393,10 +456,8 @@
         document.getElementById('subscription-id').value = '';
         
         if (mode === 'add') {
-            modalTitle.textContent = 'Add Subscription';
             submitBtn.textContent = 'Add';
         } else if (mode === 'edit') {
-            modalTitle.textContent = 'Edit Subscription';
             submitBtn.textContent = 'Save';
             
             // Populate form with existing data
@@ -406,6 +467,10 @@
         }
         
         modal.classList.add('visible');
+        
+        // Initialize floating labels when modal opens
+        initializeFloatingLabels();
+        
         document.getElementById('sub-name').focus();
     }
     
@@ -441,6 +506,9 @@
         document.getElementById('sub-currency').value = subscription.currency || '';
         document.getElementById('sub-cycle').value = subscription.billing_cycle || '';
         document.getElementById('sub-notes').value = subscription.notes || '';
+        
+        // Update floating label states after populating
+        updateFloatingLabelStates();
     }
     
     async function handleFormSubmit(e) {

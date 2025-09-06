@@ -17,32 +17,51 @@
             <button class="modal-close" id="modal-close">&times;</button>
         </div>
         
-        <form id="subscription-form">
+        <form id="subscription-form" autocomplete="off">
             <input type="hidden" id="subscription-id" name="id">
             
             <div class="form-field">
                 <label for="sub-name">name</label>
-                <input type="text" id="sub-name" name="name" required>
+                <input type="text" id="sub-name" name="name" required autocomplete="off">
             </div>
             
-            <div class="form-field">
-                <label for="sub-cost">cost</label>
-                <input type="number" id="sub-cost" name="cost" step="0.01" min="0">
-            </div>
-            
-            <div class="form-field">
-                <label for="sub-currency">currency</label>
-                <input type="text" id="sub-currency" name="currency">
-            </div>
-            
-            <div class="form-field">
-                <label for="sub-cycle">billing cycle</label>
-                <input type="text" id="sub-cycle" name="billing_cycle">
+            <div class="form-field composite-field">
+                <div class="composite-input">
+                    <span class="prefix">$</span>
+                    <input type="text" id="sub-cost" name="cost" class="inline-input cost-input" autocomplete="off">
+                    
+                    <div class="custom-dropdown inline-input cycle-input" data-field="billing_cycle">
+                        <span class="dropdown-value">monthly</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option" data-value="weekly">weekly</div>
+                            <div class="dropdown-option" data-value="monthly">monthly</div>
+                            <div class="dropdown-option" data-value="annually">annually</div>
+                        </div>
+                    </div>
+                    
+                    <div class="custom-dropdown inline-input currency-input" data-field="currency">
+                        <span class="dropdown-value">NZD</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option" data-value="NZD">NZD</div>
+                            <div class="dropdown-option" data-value="USD">USD</div>
+                            <div class="dropdown-option" data-value="INR">INR</div>
+                            <div class="dropdown-option" data-value="GBP">GBP</div>
+                            <div class="dropdown-option" data-value="EUR">EUR</div>
+                            <div class="dropdown-option" data-value="AUD">AUD</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Hidden inputs for form submission -->
+                <input type="hidden" id="sub-cycle" name="billing_cycle" value="">
+                <input type="hidden" id="sub-currency" name="currency" value="">
             </div>
             
             <div class="form-field">
                 <label for="sub-notes">notes</label>
-                <textarea id="sub-notes" name="notes" rows="3"></textarea>
+                <textarea id="sub-notes" name="notes" rows="3" autocomplete="off"></textarea>
             </div>
             
             <div class="form-actions">
@@ -240,38 +259,35 @@
     
     .form-field label {
         position: absolute;
-        left: 0;
+        left: 12px;
         top: 8px;
-        font-size: 16px;
+        font-size: 14px;
         color: #999;
         text-transform: lowercase;
         pointer-events: none;
-        transition: all 0.2s ease;
+        transition: opacity 0.2s ease;
         z-index: 1;
     }
     
-    .form-field label.active {
-        font-size: 12px;
-        color: #666;
-        right: 0;
-        left: auto;
-        bottom: 2px;
-        top: auto;
+    .form-field label.hidden {
+        opacity: 0;
     }
     
-    .form-field input,
+    .form-field:not(.composite-field) input,
     .form-field textarea {
         border: none;
         border-bottom: 1px solid #e0e0e0;
         padding: 8px 0;
-        padding-right: 60px;
-        font-size: 16px;
+        padding-left: 12px;
+        font-size: 14px;
         background: transparent;
         outline: none;
         transition: border-bottom-color 0.2s ease;
+        max-width: 85%;
+        color: #999;
     }
     
-    .form-field input:focus,
+    .form-field:not(.composite-field) input:focus,
     .form-field textarea:focus {
         border-bottom-color: #ccc;
     }
@@ -279,6 +295,103 @@
     .form-field textarea {
         resize: vertical;
         min-height: 60px;
+    }
+    
+    /* Composite field styling */
+    .composite-field .composite-input {
+        display: flex;
+        align-items: baseline;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 8px 0;
+        padding-left: 8px;
+        transition: border-bottom-color 0.2s ease;
+        max-width: 85%;
+    }
+    
+    .composite-field.focused .composite-input {
+        border-bottom-color: #ccc;
+    }
+    
+    /* Hide dropdowns when cost field is empty */
+    .composite-field:not(.has-cost) .custom-dropdown {
+        display: none;
+    }
+    
+    .composite-input .prefix,
+    .composite-input .separator {
+        color: #999;
+        font-size: 14px;
+        margin: 0 4px;
+    }
+    
+    /* Cost input only (text input) */
+    .composite-input .cost-input {
+        border: none;
+        background: transparent;
+        outline: none;
+        font-size: 14px;
+        padding: 0;
+        min-width: 20px;
+        width: 60px;
+        color: #999;
+        margin-right: 8px;
+    }
+    
+    
+    /* Custom dropdown styling */
+    .custom-dropdown {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+        font-size: 12px;
+        color: #999;
+    }
+    
+    .custom-dropdown.currency-input {
+        margin-left: 48px;
+    }
+    
+    .custom-dropdown .dropdown-value {
+        margin-right: 4px;
+    }
+    
+    .custom-dropdown .dropdown-arrow {
+        font-size: 10px;
+        color: #999;
+    }
+    
+    .custom-dropdown .dropdown-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: #f6f6f6;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        border-radius: 4px;
+        padding: 8px 0;
+        min-width: 100px;
+        z-index: 1000;
+        display: none;
+    }
+    
+    .custom-dropdown.open .dropdown-menu {
+        display: block;
+    }
+    
+    .dropdown-option {
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 16px;
+        color: #333;
+        transition: background-color 0.1s ease;
+    }
+    
+    .dropdown-option:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
+    
+    .dropdown-option.selected {
+        background-color: rgba(0,0,0,0.1);
     }
     
     .form-actions {
@@ -396,26 +509,144 @@
         const formFields = document.querySelectorAll('.form-field');
         
         formFields.forEach(field => {
-            const input = field.querySelector('input, textarea');
-            const label = field.querySelector('label');
-            
-            if (!input || !label) return;
-            
-            // Single input event handler for all state changes
-            input.addEventListener('input', () => {
-                updateLabelState(input, label);
-            });
+            // Handle composite field differently (no label, dropdowns handled separately)
+            if (field.classList.contains('composite-field')) {
+                const costInput = field.querySelector('.cost-input');
+                if (costInput) {
+                    // Handle focus for border highlighting
+                    costInput.addEventListener('focus', () => {
+                        field.classList.add('focused');
+                    });
+                    
+                    costInput.addEventListener('blur', () => {
+                        field.classList.remove('focused');
+                    });
+                    
+                    // Handle input to show/hide dropdowns
+                    costInput.addEventListener('input', () => {
+                        updateCostFieldState(field, costInput);
+                    });
+                    
+                    // Initialize state
+                    updateCostFieldState(field, costInput);
+                }
+            } else {
+                const label = field.querySelector('label');
+                if (!label) return;
+                // Standard field handling
+                const input = field.querySelector('input, textarea');
+                if (!input) return;
+                
+                input.addEventListener('input', () => {
+                    updateLabelState(input, label);
+                });
+            }
         });
         
         labelsInitialized = true;
         updateFloatingLabelStates();
+        
+        // Initialize custom dropdowns
+        initializeCustomDropdowns();
+    }
+    
+    function initializeCustomDropdowns() {
+        const dropdowns = document.querySelectorAll('.custom-dropdown');
+        
+        dropdowns.forEach(dropdown => {
+            // Click to toggle dropdown
+            dropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleDropdown(dropdown);
+            });
+            
+            // Handle option selection
+            const options = dropdown.querySelectorAll('.dropdown-option');
+            options.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectOption(dropdown, option);
+                });
+            });
+        });
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            closeAllDropdowns();
+        });
+    }
+    
+    function toggleDropdown(dropdown) {
+        // Close other dropdowns first
+        const otherDropdowns = document.querySelectorAll('.custom-dropdown.open');
+        otherDropdowns.forEach(other => {
+            if (other !== dropdown) {
+                other.classList.remove('open');
+            }
+        });
+        
+        // Toggle this dropdown
+        dropdown.classList.toggle('open');
+    }
+    
+    function selectOption(dropdown, option) {
+        const value = option.dataset.value;
+        const text = option.textContent;
+        const field = dropdown.dataset.field;
+        
+        // Update display value
+        const valueSpan = dropdown.querySelector('.dropdown-value');
+        valueSpan.textContent = text;
+        
+        // Update hidden input for form submission
+        const hiddenInput = document.getElementById(field === 'billing_cycle' ? 'sub-cycle' : 'sub-currency');
+        if (hiddenInput) {
+            hiddenInput.value = value;
+        }
+        
+        // Update selected state
+        dropdown.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('selected'));
+        option.classList.add('selected');
+        
+        // Close dropdown
+        dropdown.classList.remove('open');
+    }
+    
+    function closeAllDropdowns() {
+        document.querySelectorAll('.custom-dropdown.open').forEach(dropdown => {
+            dropdown.classList.remove('open');
+        });
+    }
+    
+    function updateDropdownDisplay(fieldName, value) {
+        const dropdown = document.querySelector(`[data-field="${fieldName}"]`);
+        if (!dropdown || !value) return;
+        
+        const valueSpan = dropdown.querySelector('.dropdown-value');
+        const option = dropdown.querySelector(`[data-value="${value}"]`);
+        
+        if (option && valueSpan) {
+            valueSpan.textContent = option.textContent;
+            
+            // Update selected state
+            dropdown.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('selected'));
+            option.classList.add('selected');
+        }
+    }
+    
+    function updateCostFieldState(field, costInput) {
+        if (costInput.value && costInput.value.trim()) {
+            field.classList.add('has-cost');
+        } else {
+            field.classList.remove('has-cost');
+        }
     }
     
     function updateLabelState(input, label) {
         if (input.value && input.value.trim()) {
-            label.classList.add('active');
+            label.classList.add('hidden');
         } else {
-            label.classList.remove('active');
+            label.classList.remove('hidden');
         }
     }
     
@@ -423,8 +654,13 @@
         const formFields = document.querySelectorAll('.form-field');
         
         formFields.forEach(field => {
-            const input = field.querySelector('input, textarea');
+            // Skip composite field (no label to update)
+            if (field.classList.contains('composite-field')) {
+                return;
+            }
+            
             const label = field.querySelector('label');
+            const input = field.querySelector('input, textarea');
             
             if (!input || !label) return;
             
@@ -503,9 +739,21 @@
         }
         document.getElementById('sub-cost').value = costValue;
         
+        // Update hidden inputs
         document.getElementById('sub-currency').value = subscription.currency || '';
         document.getElementById('sub-cycle').value = subscription.billing_cycle || '';
         document.getElementById('sub-notes').value = subscription.notes || '';
+        
+        // Update dropdown displays
+        updateDropdownDisplay('currency', subscription.currency);
+        updateDropdownDisplay('billing_cycle', subscription.billing_cycle);
+        
+        // Update cost field state to show dropdowns if cost exists
+        const compositeField = document.querySelector('.composite-field');
+        const costInput = document.getElementById('sub-cost');
+        if (compositeField && costInput) {
+            updateCostFieldState(compositeField, costInput);
+        }
         
         // Update floating label states after populating
         updateFloatingLabelStates();

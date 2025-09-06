@@ -526,9 +526,6 @@
                     costInput.addEventListener('input', () => {
                         updateCostFieldState(field, costInput);
                     });
-                    
-                    // Initialize state
-                    updateCostFieldState(field, costInput);
                 }
             } else {
                 const label = field.querySelector('label');
@@ -706,6 +703,13 @@
         
         // Initialize floating labels when modal opens
         initializeFloatingLabels();
+        
+        // Always update cost field state when modal opens
+        const compositeField = document.querySelector('.composite-field');
+        const costInput = document.querySelector('.cost-input');
+        if (compositeField && costInput) {
+            updateCostFieldState(compositeField, costInput);
+        }
         
         document.getElementById('sub-name').focus();
     }

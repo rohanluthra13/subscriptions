@@ -25,41 +25,42 @@
                 <input type="text" id="sub-name" name="name" required autocomplete="off">
             </div>
             
-            <div class="form-field">
-                <label for="sub-cost">cost</label>
-                <div class="cost-input-wrapper">
-                    <input type="text" id="sub-cost" name="cost" autocomplete="off">
-                    <span class="dollar-prefix">$</span>
-                </div>
-            </div>
-            
-            <div class="form-field dropdown-field">
-                <div class="custom-dropdown" data-field="billing_cycle">
-                    <span class="dropdown-value">monthly</span>
-                    <span class="dropdown-arrow">▼</span>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-option" data-value="weekly">weekly</div>
-                        <div class="dropdown-option selected" data-value="monthly">monthly</div>
-                        <div class="dropdown-option" data-value="annually">annually</div>
+            <div class="form-row">
+                <div class="form-field cost-field">
+                    <div class="cost-input-wrapper">
+                        <input type="text" id="sub-cost" name="cost" autocomplete="off">
+                        <span class="dollar-prefix">$</span>
                     </div>
                 </div>
-                <input type="hidden" id="sub-cycle" name="billing_cycle" value="monthly">
-            </div>
-            
-            <div class="form-field dropdown-field">
-                <div class="custom-dropdown" data-field="currency">
-                    <span class="dropdown-value">NZD</span>
-                    <span class="dropdown-arrow">▼</span>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-option selected" data-value="NZD">NZD</div>
-                        <div class="dropdown-option" data-value="USD">USD</div>
-                        <div class="dropdown-option" data-value="INR">INR</div>
-                        <div class="dropdown-option" data-value="GBP">GBP</div>
-                        <div class="dropdown-option" data-value="EUR">EUR</div>
-                        <div class="dropdown-option" data-value="AUD">AUD</div>
+                
+                <div class="form-field cycle-field">
+                    <div class="custom-dropdown" data-field="billing_cycle">
+                        <span class="dropdown-value">monthly</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option" data-value="weekly">weekly</div>
+                            <div class="dropdown-option selected" data-value="monthly">monthly</div>
+                            <div class="dropdown-option" data-value="annually">annually</div>
+                        </div>
                     </div>
+                    <input type="hidden" id="sub-cycle" name="billing_cycle" value="monthly">
                 </div>
-                <input type="hidden" id="sub-currency" name="currency" value="NZD">
+                
+                <div class="form-field currency-field">
+                    <div class="custom-dropdown" data-field="currency">
+                        <span class="dropdown-value">NZD</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option selected" data-value="NZD">NZD</div>
+                            <div class="dropdown-option" data-value="USD">USD</div>
+                            <div class="dropdown-option" data-value="INR">INR</div>
+                            <div class="dropdown-option" data-value="GBP">GBP</div>
+                            <div class="dropdown-option" data-value="EUR">EUR</div>
+                            <div class="dropdown-option" data-value="AUD">AUD</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="sub-currency" name="currency" value="NZD">
+                </div>
             </div>
             
             <div class="form-field">
@@ -303,48 +304,58 @@
     /* Cost field with dollar prefix */
     .cost-input-wrapper {
         position: relative;
-        max-width: 85%;
+        width: 100%;  /* Take full width of parent */
     }
     
     .cost-input-wrapper .dollar-prefix {
         position: absolute;
         left: 12px;
-        top: 6px;
+        top: 7px;
         color: #999;
         font-size: 14px;
-        opacity: 0;
-        transition: opacity 0.2s ease;
+        opacity: 1;  /* Always visible */
         pointer-events: none;
     }
     
-    .cost-input-wrapper input {
-        padding-left: 12px;
-        transition: padding-left 0.2s ease;
+    .cost-input-wrapper input[type="text"] {
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 8px 0;
+        padding-left: 28px !important;  /* Override generic rule - same specificity now */
+        font-size: 14px;
+        background: transparent;
+        outline: none;
+        transition: border-bottom-color 0.2s ease;
+        color: #999;
     }
     
     .cost-input-wrapper input:focus {
-        padding-left: 28px;
+        border-bottom-color: #ccc;
     }
     
-    .cost-input-wrapper input:not([value=""]) {
-        padding-left: 28px;
-    }
-    
-    .cost-input-wrapper.has-value input {
-        padding-left: 28px;
-    }
-    
-    .cost-input-wrapper input:focus ~ .dollar-prefix {
-        opacity: 1;
-    }
-    
-    .cost-input-wrapper.has-value .dollar-prefix {
-        opacity: 1;
-    }
-    
-    /* Dropdown fields - no label needed */
-    .form-field.dropdown-field {
+    /* Horizontal row for cost fields */
+    .form-row {
+        display: flex;
+        gap: 15%;  /* Your specified gap between fields */
+        width: 85%; /* Match other fields' max-width */
         margin-bottom: 32px;
+    }
+    
+    .form-row .form-field {
+        margin-bottom: 0; /* Remove individual field margins */
+    }
+    
+    .form-row .cost-field {
+        flex: 2;  /* 20% proportion */
+    }
+    
+    .form-row .cycle-field {
+        flex: 3;  /* 30% proportion */
+    }
+    
+    .form-row .currency-field {
+        flex: 2;  /* 20% proportion */
     }
     
     
@@ -359,7 +370,7 @@
         border-bottom: 1px solid #e0e0e0;
         padding: 8px 0;
         padding-left: 12px;
-        max-width: 85%;
+        width: 100%;  /* Take full width of parent */
         transition: border-bottom-color 0.2s ease;
     }
     
@@ -531,36 +542,14 @@
             const input = field.querySelector('input[type="text"], textarea');
             if (!input) return;
             
-            // Handle label hiding on input
-            input.addEventListener('input', () => {
-                updateLabelState(input, label);
-                
-                // Special handling for cost field
-                if (input.id === 'sub-cost') {
-                    const wrapper = field.querySelector('.cost-input-wrapper');
-                    if (wrapper) {
-                        if (input.value.trim()) {
-                            wrapper.classList.add('has-value');
-                        } else {
-                            wrapper.classList.remove('has-value');
-                        }
-                    }
-                }
-            });
-            
-            // Special handling for cost field - hide label on focus
-            if (input.id === 'sub-cost') {
-                input.addEventListener('focus', () => {
-                    label.classList.add('hidden');
-                });
-                
-                input.addEventListener('blur', () => {
-                    // Only show label again if field is empty
-                    if (!input.value.trim()) {
-                        label.classList.remove('hidden');
-                    }
+            // Handle label hiding on input (skip cost field - no label)
+            if (input.id !== 'sub-cost') {
+                input.addEventListener('input', () => {
+                    updateLabelState(input, label);
                 });
             }
+            
+            // No special handling needed for cost field anymore (no label)
         });
         
         labelsInitialized = true;
@@ -671,24 +660,12 @@
             
             if (!input || !label) return;
             
-            // For cost field, check if it's currently focused
-            if (input.id === 'sub-cost' && document.activeElement === input) {
-                label.classList.add('hidden');
-            } else {
-                updateLabelState(input, label);
+            // Skip cost field (no label anymore)
+            if (input.id === 'sub-cost') {
+                return;
             }
             
-            // Update cost field wrapper state
-            if (input.id === 'sub-cost') {
-                const wrapper = field.querySelector('.cost-input-wrapper');
-                if (wrapper) {
-                    if (input.value.trim()) {
-                        wrapper.classList.add('has-value');
-                    } else {
-                        wrapper.classList.remove('has-value');
-                    }
-                }
-            }
+            updateLabelState(input, label);
         });
     }
     

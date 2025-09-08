@@ -173,6 +173,35 @@ def fetch_favicon_for_domain(domain, timeout=5, max_size=500000):
         # Always close the session to free resources
         session.close()
 
+def handle_db_errors(default_return=None, should_raise=False):
+    """
+    Decorator to handle common database errors consistently.
+    
+    Args:
+        default_return: Value to return if database is locked/timeout (default: None)
+        should_raise: If True, re-raise database errors instead of returning default
+    
+    Usage:
+        @handle_db_errors(default_return=[])
+        def get_data(self): ...
+        
+        @handle_db_errors(should_raise=True)  
+        def update_data(self): ...
+    """
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            try:
+                return func(self, *args, **kwargs)
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
+                    print(f"Database timeout/lock in {func.__name__}: {e}")
+                    if should_raise:
+                        raise
+                    return default_return
+                raise  # Re-raise other operational errors
+        return wrapper
+    return decorator
+
 class JobManager:
     """Manages background jobs for long-running operations"""
     def __init__(self):
@@ -731,85 +760,70 @@ class SubscriptionManager:
             return False
 
 
+    @handle_db_errors(default_return=[])
     def get_connections(self):
         """Get all Gmail connections with timeout handling"""
-        try:
-            with self.db_connection(timeout=5.0) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT * FROM connections ORDER BY created_at DESC')
-                columns = [desc[0] for desc in cursor.description]
-                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            return results
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"Database timeout/lock in get_connections: {e}")
-                return []  # Return empty list to allow page to render
-            raise
+        with self.db_connection(timeout=5.0) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM connections ORDER BY created_at DESC')
+            columns = [desc[0] for desc in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return results
 
+    @handle_db_errors(default_return=[])
     def get_subscriptions(self):
         """Get all subscriptions with timeout handling"""
-        try:
-            with self.db_connection(timeout=5.0) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT * FROM subscriptions ORDER BY created_at DESC')
-                columns = [desc[0] for desc in cursor.description]
-                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            return results
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"Database timeout/lock in get_subscriptions: {e}")
-                return []  # Return empty list to allow page to render
-            raise  # Re-raise other operational errors
+        with self.db_connection(timeout=5.0) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM subscriptions ORDER BY created_at DESC')
+            columns = [desc[0] for desc in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return results
 
+    @handle_db_errors(should_raise=True)
     def update_subscription(self, subscription_id, field, value):
         """Update a single field of a subscription"""
-        try:
-            with self.db_connection(timeout=5.0) as conn:
-                cursor = conn.cursor()
+        with self.db_connection(timeout=5.0) as conn:
+            cursor = conn.cursor()
+            
+            # Validate field name for security
+            valid_fields = ['name', 'category', 'cost', 'currency', 'billing_cycle', 
+                           'status', 'auto_renewing', 'next_billing_date', 'notes', 'website_url']
+            if field not in valid_fields:
+                raise ValueError(f"Invalid field: {field}")
+            
+            # Handle boolean conversion for auto_renewing
+            if field == 'auto_renewing':
+                value = bool(int(value)) if value in ['0', '1'] else bool(value)
+            
+            # Update the field and set updated_at timestamp
+            cursor.execute(f'''
+                UPDATE subscriptions 
+                SET {field} = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            ''', (value, subscription_id))
+            
+            conn.commit()
+            
+            # Check if the update actually affected a row
+            if cursor.rowcount == 0:
+                raise ValueError(f"Subscription with id {subscription_id} not found")
+            
+            # Trigger logo fetch if website_url was updated
+            if field == 'website_url' and value:
+                def fetch_logo_async():
+                    try:
+                        print(f"Auto-fetching logo for updated website URL: {value}")
+                        self.fetch_logo_for_subscription(subscription_id)
+                    except Exception as e:
+                        print(f"Background logo fetch failed for subscription {subscription_id}: {e}")
                 
-                # Validate field name for security
-                valid_fields = ['name', 'category', 'cost', 'currency', 'billing_cycle', 
-                               'status', 'auto_renewing', 'next_billing_date', 'notes', 'website_url']
-                if field not in valid_fields:
-                    raise ValueError(f"Invalid field: {field}")
+                thread = threading.Thread(target=fetch_logo_async, daemon=True)
+                thread.start()
                 
-                # Handle boolean conversion for auto_renewing
-                if field == 'auto_renewing':
-                    value = bool(int(value)) if value in ['0', '1'] else bool(value)
-                
-                # Update the field and set updated_at timestamp
-                cursor.execute(f'''
-                    UPDATE subscriptions 
-                    SET {field} = ?, updated_at = CURRENT_TIMESTAMP 
-                    WHERE id = ?
-                ''', (value, subscription_id))
-                
-                conn.commit()
-                
-                # Check if the update actually affected a row
-                if cursor.rowcount == 0:
-                    raise ValueError(f"Subscription with id {subscription_id} not found")
-                
-                # Trigger logo fetch if website_url was updated
-                if field == 'website_url' and value:
-                    def fetch_logo_async():
-                        try:
-                            print(f"Auto-fetching logo for updated website URL: {value}")
-                            self.fetch_logo_for_subscription(subscription_id)
-                        except Exception as e:
-                            print(f"Background logo fetch failed for subscription {subscription_id}: {e}")
-                    
-                    thread = threading.Thread(target=fetch_logo_async, daemon=True)
-                    thread.start()
-                    
-                return True
-                
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"Database timeout/lock in update_subscription: {e}")
-                raise
-            raise
+            return True
 
+    @handle_db_errors(should_raise=True)
     def create_subscription(self, data=None):
         """Create a new subscription with default or provided values"""
         try:
@@ -867,46 +881,30 @@ class SubscriptionManager:
             if "UNIQUE constraint failed: subscriptions.name" in str(e):
                 raise ValueError("A subscription with this name already exists")
             raise
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"Database timeout/lock in create_subscription: {e}")
-                raise
-            raise
 
+    @handle_db_errors(should_raise=True)
     def delete_subscription(self, subscription_id):
         """Delete a subscription by ID"""
-        try:
-            with self.db_connection(timeout=5.0) as conn:
-                cursor = conn.cursor()
+        with self.db_connection(timeout=5.0) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('DELETE FROM subscriptions WHERE id = ?', (subscription_id,))
+            conn.commit()
+            
+            # Check if the delete actually affected a row
+            if cursor.rowcount == 0:
+                raise ValueError(f"Subscription with id {subscription_id} not found")
                 
-                cursor.execute('DELETE FROM subscriptions WHERE id = ?', (subscription_id,))
-                conn.commit()
-                
-                # Check if the delete actually affected a row
-                if cursor.rowcount == 0:
-                    raise ValueError(f"Subscription with id {subscription_id} not found")
-                    
-                return True
-                
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"Database timeout/lock in delete_subscription: {e}")
-                raise
-            raise
+            return True
 
+    @handle_db_errors(default_return=0)
     def get_email_count(self):
         """Get total count of processed emails with timeout handling"""
-        try:
-            with self.db_connection(timeout=5.0) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT COUNT(*) FROM processed_emails')
-                count = cursor.fetchone()[0]
-            return count
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"Database timeout/lock in get_email_count: {e}")
-                return 0  # Return 0 to allow page to render
-            raise
+        with self.db_connection(timeout=5.0) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM processed_emails')
+            count = cursor.fetchone()[0]
+        return count
 
     def get_processed_emails(self, limit: int = None, offset: int = 0, filters: dict = None, sort_by: str = None, sort_dir: str = 'desc'):
         """Get processed emails with optional pagination, filters, and sorting"""

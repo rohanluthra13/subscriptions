@@ -23,6 +23,47 @@ from contextlib import contextmanager
 # Load environment variables
 load_dotenv()
 
+# Logo fetching utilities
+def fetch_favicon_for_domain(domain, timeout=5):
+    """
+    Utility function to fetch favicon for a domain
+    Returns (logo_data, content_type) tuple or (None, None) if failed
+    
+    Tries multiple favicon locations in order of preference:
+    1. Standard favicon.ico location
+    2. PNG favicon
+    3. Google's favicon service as fallback
+    """
+    # Clean domain - remove protocol if present
+    if '://' in domain:
+        domain = urlparse(domain).netloc
+    
+    favicon_urls = [
+        f"https://{domain}/favicon.ico",
+        f"https://{domain}/favicon.png", 
+        f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
+    ]
+    
+    headers = {
+        'User-Agent': 'SubscriptionManager/1.0 (Favicon Fetcher)',
+        'Accept': 'image/*'
+    }
+    
+    for url in favicon_urls:
+        try:
+            response = requests.get(url, timeout=timeout, headers=headers)
+            if response.status_code == 200 and response.content:
+                # Get content type, default to image/x-icon for .ico files
+                content_type = response.headers.get('content-type', 'image/x-icon')
+                if url.endswith('.ico') and 'icon' not in content_type:
+                    content_type = 'image/x-icon'
+                return response.content, content_type
+        except Exception as e:
+            print(f"Failed to fetch favicon from {url}: {e}")
+            continue
+    
+    return None, None
+
 class JobManager:
     """Manages background jobs for long-running operations"""
     def __init__(self):
@@ -856,6 +897,77 @@ class SubscriptionManager:
         except Exception as e:
             print(f"Error writing llm_notes.md: {e}")
             return False
+    
+    def update_subscription_logo(self, subscription_id, logo_data, content_type):
+        """
+        Update subscription logo in database
+        Args:
+            subscription_id: The subscription ID
+            logo_data: Binary logo data (bytes)
+            content_type: MIME type (e.g., 'image/png', 'image/x-icon')
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            with self.db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE subscriptions SET logo_data = ?, logo_content_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    (logo_data, content_type, subscription_id)
+                )
+                conn.commit()  # Explicitly commit the transaction
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error updating logo for subscription {subscription_id}: {e}")
+            return False
+    
+    def fetch_logo_for_subscription(self, subscription_id):
+        """
+        Fetch and update logo for a subscription based on its website_url
+        Args:
+            subscription_id: The subscription ID
+        Returns:
+            dict: Result with 'success' bool and 'message' string
+        """
+        try:
+            # Get subscription details
+            with self.db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT name, website_url FROM subscriptions WHERE id = ?',
+                    (subscription_id,)
+                )
+                result = cursor.fetchone()
+                
+                if not result:
+                    return {'success': False, 'message': 'Subscription not found'}
+                
+                name, website_url = result
+                
+                if not website_url:
+                    return {'success': False, 'message': f'No website URL set for {name}'}
+                
+                # Extract domain and fetch logo
+                domain = urlparse(website_url).netloc if '://' in website_url else website_url
+                logo_data, content_type = fetch_favicon_for_domain(domain)
+                
+                if logo_data:
+                    # Update database with logo
+                    if self.update_subscription_logo(subscription_id, logo_data, content_type):
+                        return {
+                            'success': True, 
+                            'message': f'Logo fetched and updated for {name}',
+                            'content_type': content_type,
+                            'size_bytes': len(logo_data)
+                        }
+                    else:
+                        return {'success': False, 'message': f'Failed to save logo for {name}'}
+                else:
+                    return {'success': False, 'message': f'Could not fetch logo for {name} from {domain}'}
+                    
+        except Exception as e:
+            print(f"Error fetching logo for subscription {subscription_id}: {e}")
+            return {'success': False, 'message': f'Error: {str(e)}'}
 
 
 

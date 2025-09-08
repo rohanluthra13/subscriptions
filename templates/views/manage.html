@@ -789,8 +789,9 @@
         const data = {
             name: formData.get('name'),
             cost: formData.get('cost') || null,
-            currency: formData.get('currency') || 'USD',
+            currency: formData.get('currency') || 'NZD',
             billing_cycle: formData.get('billing_cycle') || null,
+            website_url: formData.get('website_url') || null,
             notes: formData.get('notes') || null
         };
         

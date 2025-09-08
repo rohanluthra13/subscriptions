@@ -703,7 +703,7 @@ class SubscriptionManager:
                 name = data.get('name', 'New Subscription')
                 category = data.get('category', '')
                 cost = data.get('cost', 0.00)
-                currency = data.get('currency', 'USD')
+                currency = data.get('currency', 'NZD')
                 billing_cycle = data.get('billing_cycle', 'monthly')
                 status = data.get('status', 'active')
                 auto_renewing = data.get('auto_renewing', True)

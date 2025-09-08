@@ -1019,6 +1019,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_reset()
         elif path == '/api/subscriptions':
             self.handle_subscriptions_list()
+        elif path.startswith('/logo/'):
+            # Extract subscription ID from path
+            sub_id = path.split('/')[-1] if '/' in path else None
+            if sub_id:
+                self.serve_subscription_logo(sub_id)
+            else:
+                self.send_error(404)
         else:
             self.send_error(404)
 
@@ -1070,6 +1077,36 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.wfile.write(html.encode())
         except Exception as e:
             self.send_error(500, f"Failed to load view: {str(e)}")
+    
+    def serve_subscription_logo(self, subscription_id):
+        """Serve logo image for a subscription"""
+        try:
+            # Get logo data from database
+            with self.sm.db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT logo_data, logo_content_type FROM subscriptions WHERE id = ?',
+                    (subscription_id,)
+                )
+                result = cursor.fetchone()
+                
+                if result and result['logo_data']:
+                    logo_data = result['logo_data']
+                    content_type = result['logo_content_type'] or 'image/x-icon'
+                    
+                    # Send the image
+                    self.send_response(200)
+                    self.send_header('Content-type', content_type)
+                    self.send_header('Content-length', str(len(logo_data)))
+                    self.send_header('Cache-Control', 'public, max-age=86400')  # Cache for 1 day
+                    self.end_headers()
+                    self.wfile.write(logo_data)
+                else:
+                    # No logo found - return a 404 or placeholder
+                    self.send_error(404, "Logo not found")
+        except Exception as e:
+            print(f"Error serving logo for subscription {subscription_id}: {e}")
+            self.send_error(500, "Failed to serve logo")
     
     def get_view_content(self, view_name):
         """Get content for a specific view"""
@@ -1195,9 +1232,18 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 else:
                     details_display = f'<span class="card-cost">{cost_display}</span><span class="card-cycle">{cycle_display}</span>'
                 
+                # Check if subscription has a logo
+                sub_id = sub.get('id', '')
+                logo_html = ''
+                if sub.get('logo_data'):
+                    logo_html = f'<img class="card-logo" src="/logo/{sub_id}" alt="{sub["name"]} logo">'
+                
                 subscription_cards += f'''
-                <div class="subscription-card" data-subscription-id="{sub.get('id', '')}">
-                    <div class="card-name">{sub['name']}</div>
+                <div class="subscription-card" data-subscription-id="{sub_id}">
+                    <div class="card-left">
+                        {logo_html}
+                        <div class="card-name">{sub['name']}</div>
+                    </div>
                     <div class="card-details">
                         {details_display}
                     </div>
@@ -1677,13 +1723,24 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         try:
             subscriptions = self.sm.get_subscriptions()
             
+            # Remove logo_data from each subscription to make it JSON-serializable
+            # Keep logo_content_type to indicate if a logo exists
+            json_safe_subscriptions = []
+            for sub in subscriptions:
+                sub_copy = sub.copy()
+                if 'logo_data' in sub_copy:
+                    # Replace BLOB data with a boolean flag
+                    sub_copy['has_logo'] = bool(sub_copy.get('logo_data'))
+                    del sub_copy['logo_data']
+                json_safe_subscriptions.append(sub_copy)
+            
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             
             response = {
                 'success': True,
-                'subscriptions': subscriptions
+                'subscriptions': json_safe_subscriptions
             }
             self.wfile.write(json.dumps(response).encode())
             

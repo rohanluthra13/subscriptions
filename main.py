@@ -24,7 +24,7 @@ from contextlib import contextmanager
 load_dotenv()
 
 # Logo fetching utilities
-def fetch_favicon_for_domain(domain, timeout=5):
+def fetch_favicon_for_domain(domain, timeout=5, max_size=500000):
     """
     Utility function to fetch favicon for a domain
     Returns (logo_data, content_type) tuple or (None, None) if failed
@@ -34,6 +34,11 @@ def fetch_favicon_for_domain(domain, timeout=5):
     2. Standard favicon.ico location
     3. PNG favicon
     4. Google's favicon service as fallback
+    
+    Args:
+        domain: The domain to fetch favicon for
+        timeout: Request timeout in seconds
+        max_size: Maximum favicon size in bytes (default 500KB)
     """
     # Clean domain - remove protocol if present
     if '://' in domain:
@@ -44,11 +49,15 @@ def fetch_favicon_for_domain(domain, timeout=5):
         'Accept': 'image/*,text/html'
     }
     
-    # First, try to parse HTML for favicon links
+    # Create session for proper resource management
+    session = requests.Session()
+    
     try:
-        html_response = requests.get(f"https://{domain}", timeout=timeout, headers=headers)
-        if html_response.status_code == 200:
-            html_content = html_response.text[:50000]  # Limit to first 50KB
+        # First, try to parse HTML for favicon links
+        try:
+            html_response = session.get(f"https://{domain}", timeout=timeout, headers=headers)
+            if html_response.status_code == 200:
+                html_content = html_response.text[:50000]  # Limit to first 50KB
             
             # Look for favicon link tags (simple regex approach)
             import re
@@ -75,47 +84,94 @@ def fetch_favicon_for_domain(domain, timeout=5):
                         favicon_url = f"https://{domain}/{match}"
                     
                     try:
-                        response = requests.get(favicon_url, timeout=timeout, headers=headers)
-                        if response.status_code == 200 and response.content:
-                            # Detect content type from URL or response
-                            content_type = response.headers.get('content-type', '')
-                            if not content_type:
-                                if '.png' in favicon_url.lower():
-                                    content_type = 'image/png'
-                                elif '.ico' in favicon_url.lower():
-                                    content_type = 'image/x-icon'
-                                elif '.jpg' in favicon_url.lower() or '.jpeg' in favicon_url.lower():
-                                    content_type = 'image/jpeg'
-                                else:
-                                    content_type = 'image/x-icon'
-                            print(f"Found favicon via HTML parsing: {favicon_url}")
-                            return response.content, content_type
-                    except Exception:
-                        continue
-    except Exception as e:
-        print(f"Failed to parse HTML for favicon: {e}")
-    
-    # Fallback to standard locations
-    favicon_urls = [
-        f"https://{domain}/favicon.ico",
-        f"https://{domain}/favicon.png", 
-        f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
-    ]
-    
-    for url in favicon_urls:
-        try:
-            response = requests.get(url, timeout=timeout, headers=headers)
-            if response.status_code == 200 and response.content:
-                # Get content type, default to image/x-icon for .ico files
-                content_type = response.headers.get('content-type', 'image/x-icon')
-                if url.endswith('.ico') and 'icon' not in content_type:
-                    content_type = 'image/x-icon'
-                return response.content, content_type
+                        response = session.get(favicon_url, timeout=timeout, headers=headers, stream=True)
+                        if response.status_code == 200:
+                            # Check content length if provided
+                            content_length = response.headers.get('content-length')
+                            if content_length and int(content_length) > max_size:
+                                print(f"Favicon too large ({content_length} bytes) from {favicon_url}")
+                                continue
+                            
+                            # Read content with size limit
+                            content = b''
+                            for chunk in response.iter_content(chunk_size=8192):
+                                content += chunk
+                                if len(content) > max_size:
+                                    print(f"Favicon exceeds max size ({max_size} bytes) from {favicon_url}")
+                                    break
+                            else:
+                                # Content is within size limit
+                                if content:
+                                    # Detect content type from URL or response
+                                    content_type = response.headers.get('content-type', '')
+                                    if not content_type:
+                                        if '.png' in favicon_url.lower():
+                                            content_type = 'image/png'
+                                        elif '.ico' in favicon_url.lower():
+                                            content_type = 'image/x-icon'
+                                        elif '.jpg' in favicon_url.lower() or '.jpeg' in favicon_url.lower():
+                                            content_type = 'image/jpeg'
+                                        else:
+                                            content_type = 'image/x-icon'
+                                    print(f"Found favicon via HTML parsing: {favicon_url} ({len(content)} bytes)")
+                                    return content, content_type
+                    except requests.exceptions.Timeout:
+                        print(f"Timeout fetching favicon from {favicon_url}")
+                    except requests.exceptions.ConnectionError:
+                        print(f"Connection error fetching favicon from {favicon_url}")
+                    except Exception as e:
+                        print(f"Error fetching favicon from {favicon_url}: {e}")
+        except requests.exceptions.Timeout:
+            print(f"Timeout fetching HTML from {domain}")
+        except requests.exceptions.ConnectionError:
+            print(f"Connection error fetching HTML from {domain}")
         except Exception as e:
-            print(f"Failed to fetch favicon from {url}: {e}")
-            continue
+            print(f"Failed to parse HTML for favicon from {domain}: {e}")
     
-    return None, None
+        # Fallback to standard locations
+        favicon_urls = [
+            f"https://{domain}/favicon.ico",
+            f"https://{domain}/favicon.png", 
+            f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
+        ]
+        
+        for url in favicon_urls:
+            try:
+                response = session.get(url, timeout=timeout, headers=headers, stream=True)
+                if response.status_code == 200:
+                    # Check size for Google's service (last fallback)
+                    content_length = response.headers.get('content-length')
+                    if content_length and int(content_length) > max_size:
+                        print(f"Favicon too large ({content_length} bytes) from {url}")
+                        continue
+                    
+                    # Read content with size limit
+                    content = b''
+                    for chunk in response.iter_content(chunk_size=8192):
+                        content += chunk
+                        if len(content) > max_size:
+                            print(f"Favicon exceeds max size ({max_size} bytes) from {url}")
+                            break
+                    else:
+                        if content:
+                            # Get content type, default to image/x-icon for .ico files
+                            content_type = response.headers.get('content-type', 'image/x-icon')
+                            if url.endswith('.ico') and 'icon' not in content_type:
+                                content_type = 'image/x-icon'
+                            print(f"Found favicon at standard location: {url} ({len(content)} bytes)")
+                            return content, content_type
+            except requests.exceptions.Timeout:
+                print(f"Timeout fetching favicon from {url}")
+            except requests.exceptions.ConnectionError:
+                print(f"Connection error fetching favicon from {url}")
+            except Exception as e:
+                print(f"Error fetching favicon from {url}: {e}")
+                continue
+        
+        return None, None
+    finally:
+        # Always close the session to free resources
+        session.close()
 
 class JobManager:
     """Manages background jobs for long-running operations"""
@@ -1009,8 +1065,8 @@ class SubscriptionManager:
             dict: Result with 'success' bool and 'message' string
         """
         try:
-            # Get subscription details
-            with self.db_connection() as conn:
+            # Get subscription details with timeout
+            with self.db_connection(timeout=5.0) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     'SELECT name, website_url FROM subscriptions WHERE id = ?',

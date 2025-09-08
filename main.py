@@ -30,24 +30,77 @@ def fetch_favicon_for_domain(domain, timeout=5):
     Returns (logo_data, content_type) tuple or (None, None) if failed
     
     Tries multiple favicon locations in order of preference:
-    1. Standard favicon.ico location
-    2. PNG favicon
-    3. Google's favicon service as fallback
+    1. Parse HTML for favicon link tags
+    2. Standard favicon.ico location
+    3. PNG favicon
+    4. Google's favicon service as fallback
     """
     # Clean domain - remove protocol if present
     if '://' in domain:
         domain = urlparse(domain).netloc
     
+    headers = {
+        'User-Agent': 'SubscriptionManager/1.0 (Favicon Fetcher)',
+        'Accept': 'image/*,text/html'
+    }
+    
+    # First, try to parse HTML for favicon links
+    try:
+        html_response = requests.get(f"https://{domain}", timeout=timeout, headers=headers)
+        if html_response.status_code == 200:
+            html_content = html_response.text[:50000]  # Limit to first 50KB
+            
+            # Look for favicon link tags (simple regex approach)
+            import re
+            # Match <link rel="icon" ... href="..."> or rel="shortcut icon"
+            favicon_patterns = [
+                r'<link[^>]*rel=["\'](?:shortcut )?icon["\'][^>]*href=["\'](.*?)["\']',
+                r'<link[^>]*href=["\'](.*?)["\'][^>]*rel=["\'](?:shortcut )?icon["\']',
+                # Also check for apple-touch-icon as fallback
+                r'<link[^>]*rel=["\']apple-touch-icon["\'][^>]*href=["\'](.*?)["\']',
+            ]
+            
+            for pattern in favicon_patterns:
+                matches = re.findall(pattern, html_content, re.IGNORECASE)
+                for match in matches:
+                    # Build absolute URL
+                    if match.startswith('http'):
+                        favicon_url = match
+                    elif match.startswith('//'):
+                        favicon_url = f"https:{match}"
+                    elif match.startswith('/'):
+                        favicon_url = f"https://{domain}{match}"
+                    else:
+                        # Relative path
+                        favicon_url = f"https://{domain}/{match}"
+                    
+                    try:
+                        response = requests.get(favicon_url, timeout=timeout, headers=headers)
+                        if response.status_code == 200 and response.content:
+                            # Detect content type from URL or response
+                            content_type = response.headers.get('content-type', '')
+                            if not content_type:
+                                if '.png' in favicon_url.lower():
+                                    content_type = 'image/png'
+                                elif '.ico' in favicon_url.lower():
+                                    content_type = 'image/x-icon'
+                                elif '.jpg' in favicon_url.lower() or '.jpeg' in favicon_url.lower():
+                                    content_type = 'image/jpeg'
+                                else:
+                                    content_type = 'image/x-icon'
+                            print(f"Found favicon via HTML parsing: {favicon_url}")
+                            return response.content, content_type
+                    except Exception:
+                        continue
+    except Exception as e:
+        print(f"Failed to parse HTML for favicon: {e}")
+    
+    # Fallback to standard locations
     favicon_urls = [
         f"https://{domain}/favicon.ico",
         f"https://{domain}/favicon.png", 
         f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
     ]
-    
-    headers = {
-        'User-Agent': 'SubscriptionManager/1.0 (Favicon Fetcher)',
-        'Accept': 'image/*'
-    }
     
     for url in favicon_urls:
         try:
@@ -680,6 +733,18 @@ class SubscriptionManager:
                 # Check if the update actually affected a row
                 if cursor.rowcount == 0:
                     raise ValueError(f"Subscription with id {subscription_id} not found")
+                
+                # Trigger logo fetch if website_url was updated
+                if field == 'website_url' and value:
+                    def fetch_logo_async():
+                        try:
+                            print(f"Auto-fetching logo for updated website URL: {value}")
+                            self.fetch_logo_for_subscription(subscription_id)
+                        except Exception as e:
+                            print(f"Background logo fetch failed for subscription {subscription_id}: {e}")
+                    
+                    thread = threading.Thread(target=fetch_logo_async, daemon=True)
+                    thread.start()
                     
                 return True
                 
@@ -726,7 +791,21 @@ class SubscriptionManager:
                 columns = [desc[0] for desc in cursor.description]
                 row = cursor.fetchone()
                 
-                return dict(zip(columns, row)) if row else None
+                result = dict(zip(columns, row)) if row else None
+                
+                # Trigger logo fetch in background if website URL provided
+                if result and website_url:
+                    def fetch_logo_async():
+                        try:
+                            print(f"Auto-fetching logo for new subscription: {name}")
+                            self.fetch_logo_for_subscription(result['id'])
+                        except Exception as e:
+                            print(f"Background logo fetch failed: {e}")
+                    
+                    thread = threading.Thread(target=fetch_logo_async, daemon=True)
+                    thread.start()
+                
+                return result
                 
         except sqlite3.IntegrityError as e:
             if "UNIQUE constraint failed: subscriptions.name" in str(e):
@@ -1674,6 +1753,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             else:
                 # Bulk update - update multiple fields
                 success = True
+                website_url_updated = False
                 for field in ['name', 'cost', 'currency', 'billing_cycle', 'notes', 'website_url']:
                     if field in data:
                         value = data[field]
@@ -1682,6 +1762,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                             continue  # Name is required, don't update if empty
                         field_success = self.sm.update_subscription(subscription_id, field, value)
                         success = success and field_success
+                        # Track if website_url was updated (logo fetch already triggered in update_subscription)
+                        if field == 'website_url' and value:
+                            website_url_updated = True
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')

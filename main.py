@@ -994,6 +994,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         # Replace {{variable}} with actual values
         for key, value in kwargs.items():
+            # IMPORTANT: We trust server-generated HTML content
+            # User data should be escaped before being put into HTML generation
+            # not at the template level
             template = template.replace('{{' + key + '}}', str(value))
         
         return template
@@ -1017,8 +1020,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_oauth_callback(params)
         elif path == '/reset':
             self.handle_reset()
-        elif path == '/api/subscriptions':
-            self.handle_subscriptions_list()
+        # REMOVED: /api/subscriptions endpoint - data now embedded in HTML
         elif path.startswith('/logo/'):
             # Extract subscription ID from path
             sub_id = path.split('/')[-1] if '/' in path else None
@@ -1050,8 +1052,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_subscription_create()
         elif path == '/api/subscriptions/delete':
             self.handle_subscription_delete()
-        elif path == '/api/subscriptions':
-            self.handle_subscriptions_list()
+        # REMOVED: /api/subscriptions endpoint - data now embedded in HTML
         else:
             self.send_error(404)
 
@@ -1186,9 +1187,28 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             </div>
             '''
     
+    def _sanitize_subscription_for_json(self, subscription):
+        """Remove BLOB data and prepare subscription for JSON serialization"""
+        sub_copy = subscription.copy()
+        if 'logo_data' in sub_copy:
+            sub_copy['has_logo'] = bool(sub_copy.get('logo_data'))
+            del sub_copy['logo_data']  # Remove BLOB data for JSON
+        return sub_copy
+    
     def get_manage_content(self):
         """Generate content for manage view with all data"""
+        import html
+        import json
+        
         subscriptions = self.sm.get_subscriptions()
+        
+        # Prepare JSON-safe data for embedding (remove BLOB data for JSON serialization)
+        json_safe_subscriptions = [
+            self._sanitize_subscription_for_json(sub) 
+            for sub in subscriptions
+        ]
+        
+        subscriptions_json = json.dumps(json_safe_subscriptions)
         
         # Generate subscription cards or empty state
         subscription_cards = ""
@@ -1234,15 +1254,18 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 
                 # Check if subscription has a logo
                 sub_id = sub.get('id', '')
+                # Escape user-provided data to prevent XSS
+                safe_name = html.escape(sub.get('name', ''))
+                
                 logo_html = ''
                 if sub.get('logo_data'):
-                    logo_html = f'<img class="card-logo" src="/logo/{sub_id}" alt="{sub["name"]} logo">'
+                    logo_html = f'<img class="card-logo" src="/logo/{sub_id}" alt="{safe_name} logo">'
                 
                 subscription_cards += f'''
                 <div class="subscription-card" data-subscription-id="{sub_id}">
                     <div class="card-left">
                         {logo_html}
-                        <div class="card-name">{sub['name']}</div>
+                        <div class="card-name">{safe_name}</div>
                     </div>
                     <div class="card-details">
                         {details_display}
@@ -1250,7 +1273,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 </div>'''
         
         return self.render_template('views/manage.html',
-            subscription_cards=subscription_cards
+            subscription_cards=subscription_cards,
+            embedded_subscriptions=subscriptions_json
         )
     
     def get_emails_content(self):
@@ -1718,39 +1742,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             response = {'success': False, 'error': f'Server error: {str(e)}'}
             self.wfile.write(json.dumps(response).encode())
 
-    def handle_subscriptions_list(self):
-        """Handle GET requests for all subscriptions as JSON"""
-        try:
-            subscriptions = self.sm.get_subscriptions()
-            
-            # Remove logo_data from each subscription to make it JSON-serializable
-            # Keep logo_content_type to indicate if a logo exists
-            json_safe_subscriptions = []
-            for sub in subscriptions:
-                sub_copy = sub.copy()
-                if 'logo_data' in sub_copy:
-                    # Replace BLOB data with a boolean flag
-                    sub_copy['has_logo'] = bool(sub_copy.get('logo_data'))
-                    del sub_copy['logo_data']
-                json_safe_subscriptions.append(sub_copy)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
-            response = {
-                'success': True,
-                'subscriptions': json_safe_subscriptions
-            }
-            self.wfile.write(json.dumps(response).encode())
-            
-        except Exception as e:
-            print(f"Error fetching subscriptions: {e}")
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': False, 'error': str(e)}
-            self.wfile.write(json.dumps(response).encode())
+    # REMOVED: handle_subscriptions_list() method - no longer needed after embedding data fix
+    # The manage view now embeds subscription data directly in HTML instead of using AJAX
 
     def handle_subscription_delete(self):
         """Handle subscription deletion requests"""

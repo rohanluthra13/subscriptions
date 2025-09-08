@@ -497,7 +497,24 @@
 </style>
 
 <script>
-    let subscriptionsData = null; // Cache for all subscription data
+    // Use embedded subscription data instead of AJAX call with error handling
+    let subscriptionsData;
+    try {
+        subscriptionsData = {{embedded_subscriptions}};
+        if (!Array.isArray(subscriptionsData)) {
+            throw new Error('Invalid subscription data format');
+        }
+    } catch (error) {
+        console.error('Failed to parse subscription data:', error);
+        subscriptionsData = [];
+        // Show error to user if data fails to load
+        setTimeout(() => {
+            const container = document.getElementById('subscription-cards');
+            if (container && subscriptionsData.length === 0) {
+                showToast('Failed to load subscription data. Please refresh the page.', 'error');
+            }
+        }, 100);
+    }
     
     function initializeSubscriptionManager() {
         const modal = document.getElementById('subscription-modal');
@@ -505,8 +522,7 @@
         const closeBtn = document.getElementById('modal-close');
         const form = document.getElementById('subscription-form');
         
-        // Fetch all subscription data on page load
-        fetchSubscriptionsData();
+        // Data is already available - no need to fetch
         
         // Add subscription button click
         addBtn.addEventListener('click', () => {
@@ -686,19 +702,6 @@
         });
     }
     
-    async function fetchSubscriptionsData() {
-        try {
-            const response = await fetch('/api/subscriptions');
-            const result = await response.json();
-            if (result.success) {
-                subscriptionsData = result.subscriptions;
-            } else {
-                console.error('Failed to fetch subscriptions:', result.error);
-            }
-        } catch (error) {
-            console.error('Network error fetching subscriptions:', error);
-        }
-    }
     
     function openModal(mode, subscriptionId = null) {
         const modal = document.getElementById('subscription-modal');

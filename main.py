@@ -126,6 +126,9 @@ class SubscriptionManager:
                 auto_renewing BOOLEAN DEFAULT 1,
                 next_billing_date DATE,
                 notes TEXT,
+                website_url TEXT,
+                logo_data BLOB,
+                logo_content_type TEXT,
                 created_by TEXT DEFAULT 'user',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -163,6 +166,22 @@ class SubscriptionManager:
         
         try:
             cursor.execute('ALTER TABLE processed_emails ADD COLUMN analyzed_for_subscriptions BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        # Add logo-related fields to subscriptions table
+        try:
+            cursor.execute('ALTER TABLE subscriptions ADD COLUMN website_url TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE subscriptions ADD COLUMN logo_data BLOB')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE subscriptions ADD COLUMN logo_content_type TEXT')
         except sqlite3.OperationalError:
             pass
         
@@ -600,7 +619,7 @@ class SubscriptionManager:
                 
                 # Validate field name for security
                 valid_fields = ['name', 'category', 'cost', 'currency', 'billing_cycle', 
-                               'status', 'auto_renewing', 'next_billing_date', 'notes']
+                               'status', 'auto_renewing', 'next_billing_date', 'notes', 'website_url']
                 if field not in valid_fields:
                     raise ValueError(f"Invalid field: {field}")
                 
@@ -1472,7 +1491,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             else:
                 # Bulk update - update multiple fields
                 success = True
-                for field in ['name', 'cost', 'currency', 'billing_cycle', 'notes']:
+                for field in ['name', 'cost', 'currency', 'billing_cycle', 'notes', 'website_url']:
                     if field in data:
                         value = data[field]
                         # Skip empty values for optional fields

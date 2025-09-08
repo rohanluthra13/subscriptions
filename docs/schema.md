@@ -31,22 +31,14 @@ SQLite database schema for the Subscription Manager application.
 │ processed_at (TIMESTAMP)        │          │ status (TEXT)                   │
 │ content (TEXT)                  │          │ auto_renewing (BOOLEAN)         │
 │ content_fetched (BOOLEAN)       │          │ next_billing_date (DATE)        │
-└─────────────────────────────────┘          │ notes (TEXT)                    │
-                                              │ next_billing_date (DATE)        │
-                                              │ notes (TEXT)                    │
+│ analyzed_for_subscriptions      │          │ notes (TEXT)                    │
+│ (BOOLEAN)                       │          │ website_url (TEXT)              │
+└─────────────────────────────────┘          │ logo_data (BLOB)                │
+                                              │ logo_content_type (TEXT)        │
                                               │ created_by (TEXT)               │
                                               │ created_at (TIMESTAMP)          │
                                               │ updated_at (TIMESTAMP)          │
                                               └─────────────────────────────────┘
-
-┌─────────────────────────────────┐
-│         scratchpad              │
-├─────────────────────────────────┤
-│ id (TEXT) PK                    │
-│ item (TEXT)                     │
-│ processed (BOOLEAN)             │
-│ created_at (TIMESTAMP)          │
-└─────────────────────────────────┘
 ```
 
 Note: Tables are independent - no formal foreign key relationships implemented
@@ -104,18 +96,13 @@ Note: Tables are independent - no formal foreign key relationships implemented
 | auto_renewing     | BOOLEAN      | DEFAULT 1                         | Whether subscription auto-renews                |
 | next_billing_date | DATE         | -                                 | Next expected charge date                       |
 | notes             | TEXT         | -                                 | Additional notes or information                 |
+| website_url       | TEXT         | -                                 | Website URL for subscription management and logo fetching |
+| logo_data         | BLOB         | -                                 | Binary logo/favicon data                        |
+| logo_content_type | TEXT         | -                                 | MIME type of logo (e.g., image/png, image/x-icon) |
 | created_by        | TEXT         | DEFAULT 'user'                    | Origin: user/gmail_import/llm                   |
 | created_at        | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP         | When subscription was added                     |
 | updated_at        | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP         | Last update timestamp                            |
 
-### scratchpad
-
-| Column          | Type      | Constraints                        | Description                              |
-|-----------------|-----------|-----------------------------------|------------------------------------------|
-| id              | TEXT      | PRIMARY KEY, DEFAULT randomblob   | Unique scratchpad item identifier        |
-| item            | TEXT      | NOT NULL                          | User-entered subscription info           |
-| processed       | BOOLEAN   | DEFAULT 0                         | Whether item has been processed         |
-| created_at      | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | When item was added                      |
 
 
 ## Relationships
@@ -135,7 +122,7 @@ No formal foreign key relationships are implemented. Tables are independent but 
 ## Constraints
 
 - UNIQUE(connections.email) - One connection per email account
-- UNIQUE(subscriptions.name) - No duplicate subscription names
+- UNIQUE(subscriptions.name) - No duplicate subscription names  
 - UNIQUE(processed_emails.gmail_message_id) - Prevent duplicate email processing
 
 ## Storage

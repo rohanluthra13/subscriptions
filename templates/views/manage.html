@@ -287,7 +287,6 @@
         background: transparent;
         outline: none;
         transition: border-bottom-color 0.2s ease;
-        max-width: 85%;
         color: #999;
     }
     
@@ -304,7 +303,7 @@
     /* Cost field with dollar prefix */
     .cost-input-wrapper {
         position: relative;
-        width: 100%;  /* Take full width of parent */
+        width: 100%;  /* Take full width of parent field */
     }
     
     .cost-input-wrapper .dollar-prefix {
@@ -337,8 +336,8 @@
     /* Horizontal row for cost fields */
     .form-row {
         display: flex;
-        gap: 15%;  /* Your specified gap between fields */
-        width: 85%; /* Match other fields' max-width */
+        align-items: center;
+        gap: 15%;  /* Percentage-based gap for responsive spacing */
         margin-bottom: 32px;
     }
     
@@ -347,15 +346,12 @@
     }
     
     .form-row .cost-field {
-        flex: 2;  /* 20% proportion */
+        width: 60px;  /* Fixed width for currency amounts */
     }
     
-    .form-row .cycle-field {
-        flex: 3;  /* 30% proportion */
-    }
-    
+    .form-row .cycle-field,
     .form-row .currency-field {
-        flex: 2;  /* 20% proportion */
+        /* Auto width - fit to dropdown content */
     }
     
     
@@ -366,11 +362,11 @@
         align-items: center;
         cursor: pointer;
         font-size: 14px;
+        background: transparent;
         color: #999;
         border-bottom: 1px solid #e0e0e0;
-        padding: 8px 0;
-        padding-left: 12px;
-        width: 100%;  /* Take full width of parent */
+        padding: 8px 4px;
+        /* Fit to content width */
         transition: border-bottom-color 0.2s ease;
     }
     
@@ -427,13 +423,13 @@
     }
     
     .form-actions button {
-        background: white;
+        background: transparent;
         color: #333;
         border: 1px solid #e0e0e0;
-        padding: 20px;
+        padding: 8px 14px;
         border-radius: 8px;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 12px;
         transition: box-shadow 0.2s ease;
         margin: 0;
         box-shadow: none;

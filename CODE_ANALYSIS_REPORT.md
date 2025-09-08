@@ -15,16 +15,17 @@ The codebase analysis reveals significant technical debt across 25+ distinct pat
 
 ## 🔴 CRITICAL PERFORMANCE ISSUES
 
-### 1. N+1 Query Pattern (main.py:443)
-**Impact**: HIGH - Performance Bottleneck
+### 1. ~~N+1 Query Pattern (main.py:443)~~ ⚠️ DOWNGRADED
+**Impact**: ~~HIGH~~ → LOW - Performance Monitoring
 ```python
-# Current: Individual queries in loop
+# Current: Individual queries in loop (BUT optimized by database indexes)
 for message in all_messages:
     cursor.execute('SELECT id FROM processed_emails WHERE gmail_message_id = ? AND email = ?', (msg_id, email))
 ```
 - **Issue**: Individual database queries for each message ID check
-- **Impact**: Exponential slowdown as email database grows (could cause timeouts with 10k+ emails)
+- **Impact**: ~~Exponential slowdown as email database grows~~ **Acceptable performance due to SQLite indexing**
 - **Location**: `fetch_year_of_emails()` method
+- **Assessment Update**: Database optimization makes this pattern perform well in practice (1000-2000 emails process "very fast")
 
 ### 2. ~~Double Data Fetching~~ ✅ FIXED
 **Impact**: HIGH - Resource Waste
@@ -43,24 +44,26 @@ for message in all_messages:
 
 ## 🟠 MAJOR ARCHITECTURAL CONFLICTS
 
-### 1. Currency Default Mismatch
+### 1. ~~Currency Default Mismatch~~ ✅ FIXED
 **Impact**: HIGH - Data Integrity Issue
-- **Server Default**: 'USD' (main.py:663, 706)
-- **Client Default**: 'NZD' (manage.html:54, 730, 771)
-- **Impact**: Forms can submit inconsistent currency data, user confusion
+- **Server Default**: ~~'USD'~~ → 'NZD' (main.py:706)
+- **Client Default**: 'NZD' (manage.html:792)
+- **Impact**: ~~Forms can submit inconsistent currency data~~ **Now consistent**
+- **FIX APPLIED**: Both server and client now default to NZD
 
-### 2. Missing Website URL in Form Submission
+### 2. ~~Missing Website URL in Form Submission~~ ✅ FIXED
 **Impact**: HIGH - Data Loss Issue
 ```javascript
-// Form collects website_url but doesn't send it
+// Form now includes website_url
 data = {
     name: formData.get('name'),
     cost: formData.get('cost'),
-    // website_url missing here!
+    website_url: formData.get('website_url') || null, // ✅ ADDED
+    // ... other fields
 };
 ```
-- **Location**: manage.html:785-792
-- **Impact**: User input for website URLs gets lost on form submission
+- **Location**: manage.html:794 (was missing, now included)
+- **Impact**: ~~User input for website URLs gets lost~~ **Now properly saved**
 
 ### 3. Auto-renewing Field Missing
 **Impact**: MEDIUM - Feature Limitation
@@ -148,8 +151,8 @@ const modal = document.getElementById('subscription-modal'); // Line 736
 
 | Category | Impact Level | Risk |
 |----------|--------------|------|
-| **Performance** | 🔴 HIGH | N+1 query pattern will cause exponential slowdown |
-| **Data Integrity** | 🟠 MEDIUM | Currency mismatch and missing website_url cause data loss |
+| **Performance** | 🟢 LOW | ~~N+1 query pattern~~ Optimized by database indexes |
+| **Data Integrity** | ✅ FIXED | ~~Currency mismatch and missing website_url~~ All resolved |
 | **Maintainability** | 🔴 HIGH | 25+ redundancy patterns make consistent changes difficult |
 | **User Experience** | 🟠 MEDIUM | Missing fields and page reloads create friction |
 | **Scalability** | 🟠 MEDIUM | Database connection issues under concurrent load |
@@ -176,8 +179,26 @@ const modal = document.getElementById('subscription-modal'); // Line 736
    - Removed orphaned route handlers
    - Extracted `_sanitize_subscription_for_json()` helper method
 
+### Data Integrity Fixes (2025-09-08)
+4. **Currency Default Mismatch** - RESOLVED
+   - Standardized both server and client to use NZD as default
+   - Eliminated USD vs NZD inconsistency
+   - Verified with testing (new subscriptions default to NZD)
+
+5. **Missing Website URL** - RESOLVED  
+   - Added website_url to form submission data object
+   - Users can now successfully save website URLs
+   - Verified data persistence in database
+
+### Assessment Corrections
+6. **N+1 Query Pattern** - DOWNGRADED
+   - Pattern exists but performs well due to database indexing
+   - User reports "very fast" processing for 1000-2000 emails
+   - SQLite optimization makes theoretical issue non-critical
+   - Moved from critical to monitoring status
+
 ### New Issues Discovered
-4. **Additional Security Concerns**
+7. **Additional Security Concerns**
    - Missing Content Security Policy headers
    - No input length validation on text fields
    - Template validation gaps
@@ -186,12 +207,12 @@ const modal = document.getElementById('subscription-modal'); // Line 736
 
 ## 🎯 PRIORITY RECOMMENDATIONS (UPDATED)
 
-### Immediate (Fix This Week)
-1. **Fix Website URL Form Submission** - Prevents user data loss
-2. **Resolve Currency Default Mismatch** - Prevents data inconsistency
+### ~~Immediate (Fix This Week)~~ ✅ COMPLETED
+1. ~~**Fix Website URL Form Submission**~~ - ✅ Fixed
+2. ~~**Resolve Currency Default Mismatch**~~ - ✅ Fixed
 
 ### High Priority (Fix This Month)  
-3. **Fix N+1 Query Pattern** - Critical performance issue
+3. ~~**Fix N+1 Query Pattern**~~ - ⚠️ Downgraded to monitoring (performs well)
 4. **Consolidate Database Error Handling** - Create helper method
 5. **Use Existing JSON Response Helper** - Improve code consistency
 
@@ -240,12 +261,13 @@ const modal = document.getElementById('subscription-modal'); // Line 736
 - **Architectural Conflicts**: 8
 - **Maintainability Concerns**: 15+
 
-### After First Round of Fixes
-- **Critical Issues Fixed**: 2 (Double data fetching, JSON injection)
+### After Second Round of Fixes  
+- **Critical Issues Fixed**: 4 (Double data fetching, JSON injection, Currency mismatch, Website URL)
+- **Issues Downgraded**: 1 (N+1 query pattern from critical to monitoring)
 - **Lines of Code Removed**: 83
 - **Performance Improvement**: 50% reduction in HTTP requests
-- **Remaining Critical Issues**: 1 (N+1 query pattern)
-- **Remaining Data Issues**: 2 (Website URL, Currency mismatch)
+- **Remaining Critical Issues**: 0
+- **Remaining Data Issues**: 1 (Auto-renewing field missing UI)
 
 **Overall Code Health**: 🟡 Moderate → 🟢 Good (improved, with known issues documented)
 

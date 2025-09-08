@@ -667,12 +667,13 @@ class SubscriptionManager:
                 status = data.get('status', 'active')
                 auto_renewing = data.get('auto_renewing', True)
                 notes = data.get('notes', '')
+                website_url = data.get('website_url', '')
                 
                 cursor.execute('''
                     INSERT INTO subscriptions 
-                    (name, category, cost, currency, billing_cycle, status, auto_renewing, notes, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user')
-                ''', (name, category, cost, currency, billing_cycle, status, auto_renewing, notes))
+                    (name, category, cost, currency, billing_cycle, status, auto_renewing, notes, website_url, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'user')
+                ''', (name, category, cost, currency, billing_cycle, status, auto_renewing, notes, website_url))
                 
                 conn.commit()
                 

@@ -64,6 +64,11 @@
             </div>
             
             <div class="form-field">
+                <label for="sub-website">website</label>
+                <input type="url" id="sub-website" name="website_url" autocomplete="off">
+            </div>
+            
+            <div class="form-field">
                 <label for="sub-notes">notes</label>
                 <textarea id="sub-notes" name="notes" rows="3" autocomplete="off"></textarea>
             </div>
@@ -278,6 +283,7 @@
     }
     
     .form-field input[type="text"],
+    .form-field input[type="url"],
     .form-field textarea {
         border: none;
         border-bottom: 1px solid #e0e0e0;
@@ -291,6 +297,7 @@
     }
     
     .form-field input[type="text"]:focus,
+    .form-field input[type="url"]:focus,
     .form-field textarea:focus {
         border-bottom-color: #ccc;
     }
@@ -535,7 +542,7 @@
             const label = field.querySelector('label');
             if (!label) return;
             
-            const input = field.querySelector('input[type="text"], textarea');
+            const input = field.querySelector('input[type="text"], input[type="url"], textarea');
             if (!input) return;
             
             // Handle label hiding on input (skip cost field - no label)
@@ -652,7 +659,7 @@
         
         formFields.forEach(field => {
             const label = field.querySelector('label');
-            const input = field.querySelector('input[type="text"], textarea');
+            const input = field.querySelector('input[type="text"], input[type="url"], textarea');
             
             if (!input || !label) return;
             
@@ -743,6 +750,7 @@
         // Update hidden inputs
         document.getElementById('sub-currency').value = subscription.currency || '';
         document.getElementById('sub-cycle').value = subscription.billing_cycle || '';
+        document.getElementById('sub-website').value = subscription.website_url || '';
         document.getElementById('sub-notes').value = subscription.notes || '';
         
         // Update dropdown displays

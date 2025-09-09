@@ -94,6 +94,15 @@
                 <!-- Space for trial checkbox later -->
             </div>
             
+            <div class="form-row">
+                <div class="form-field renewing-field">
+                    <label for="sub-renewing" style="position: static; display: flex; align-items: center; gap: 8px; font-size: 14px; color: #999; pointer-events: auto;">
+                        renewing?
+                        <input type="checkbox" id="sub-renewing" name="renewing" checked>
+                    </label>
+                </div>
+            </div>
+            
             <div class="form-field">
                 <label for="sub-website">website</label>
                 <input type="url" id="sub-website" name="website_url" autocomplete="off">
@@ -448,7 +457,8 @@
     .form-row .cycle-field,
     .form-row .currency-field,
     .form-row .category-field,
-    .form-row .status-field {
+    .form-row .status-field,
+    .form-row .renewing-field {
         /* Auto width - fit to dropdown content */
     }
     
@@ -463,7 +473,7 @@
         background: transparent;
         color: #999;
         border-bottom: 1px solid #e0e0e0;
-        padding: 8px 4px;
+        padding: 8px 12px;
         /* Fit to content width */
         transition: border-bottom-color 0.2s ease;
     }
@@ -692,6 +702,7 @@
     let subCycleField;
     let subCategoryField;
     let subStatusField;
+    let subRenewingField;
     let subWebsiteField;
     let subNotesField;
     
@@ -742,6 +753,7 @@
         subCycleField = document.getElementById('sub-cycle');
         subCategoryField = document.getElementById('sub-category');
         subStatusField = document.getElementById('sub-status');
+        subRenewingField = document.getElementById('sub-renewing');
         subWebsiteField = document.getElementById('sub-website');
         subNotesField = document.getElementById('sub-notes');
         
@@ -874,6 +886,12 @@
         
         // Use event delegation on the modal for all dropdown events
         modal.addEventListener('click', (e) => {
+            // Let checkbox and label clicks pass through normally
+            if (e.target.type === 'checkbox' || 
+                (e.target.tagName === 'LABEL' && e.target.querySelector('input[type="checkbox"]'))) {
+                return; // Don't interfere with checkbox behavior
+            }
+            
             // Handle dropdown toggle
             const dropdown = e.target.closest('.custom-dropdown');
             if (dropdown && !e.target.closest('.dropdown-menu')) {
@@ -1045,6 +1063,7 @@
         subCategoryField.value = '';
         
         subStatusField.value = 'active';
+        subRenewingField.checked = true; // Default to checked
         
         subNameField.focus();
     }
@@ -1083,6 +1102,7 @@
         subCycleField.value = subscription.billing_cycle || '';
         subCategoryField.value = subscription.category || '';
         subStatusField.value = subscription.status || '';
+        subRenewingField.checked = subscription.auto_renewing !== false; // Default to true if undefined
         subWebsiteField.value = subscription.website_url || '';
         subNotesField.value = subscription.notes || '';
         
@@ -1113,6 +1133,7 @@
             billing_cycle: formData.get('billing_cycle') || null,
             category: formData.get('category') || null,
             status: formData.get('status') || 'active',
+            auto_renewing: formData.get('renewing') === 'on',
             website_url: formData.get('website_url') || null,
             notes: formData.get('notes') || null
         };

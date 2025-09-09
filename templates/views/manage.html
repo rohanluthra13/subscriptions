@@ -65,19 +65,13 @@
             
             <div class="form-field dropdown-field">
                 <div class="custom-dropdown" data-field="category">
-                    <span class="dropdown-value">streaming</span>
+                    <span class="dropdown-value">category</span>
                     <span class="dropdown-arrow">▼</span>
                     <div class="dropdown-menu">
-                        <div class="dropdown-option selected" data-value="streaming">streaming</div>
-                        <div class="dropdown-option" data-value="software">software</div>
-                        <div class="dropdown-option" data-value="news">news</div>
-                        <div class="dropdown-option" data-value="productivity">productivity</div>
-                        <div class="dropdown-option" data-value="entertainment">entertainment</div>
-                        <div class="dropdown-option" data-value="education">education</div>
-                        <div class="dropdown-option" data-value="other">other</div>
+                        <!-- Categories will be populated by JavaScript from database -->
                     </div>
                 </div>
-                <input type="hidden" id="sub-category" name="category" value="streaming">
+                <input type="hidden" id="sub-category" name="category" value="">
             </div>
             
             <div class="form-field dropdown-field">
@@ -694,19 +688,26 @@
     
     // Use embedded subscription data instead of AJAX call with error handling
     let subscriptionsData;
+    let categoriesData;
     try {
         subscriptionsData = {{embedded_subscriptions}};
         if (!Array.isArray(subscriptionsData)) {
             throw new Error('Invalid subscription data format');
         }
+        
+        categoriesData = {{embedded_categories}};
+        if (!Array.isArray(categoriesData)) {
+            throw new Error('Invalid categories data format');
+        }
     } catch (error) {
-        console.error('Failed to parse subscription data:', error);
+        console.error('Failed to parse data:', error);
         subscriptionsData = [];
+        categoriesData = [];
         // Show error to user if data fails to load
         setTimeout(() => {
             const container = document.getElementById('subscription-cards');
             if (container && subscriptionsData.length === 0) {
-                showToast('Failed to load subscription data. Please refresh the page.', 'error');
+                showToast('Failed to load data. Please refresh the page.', 'error');
             }
         }, 100);
     }
@@ -828,10 +829,39 @@
         updateFloatingLabelStates();
     }
     
+    function buildCategoryOptions() {
+        // Simple alphabetical list from database
+        let options = '';
+        
+        if (categoriesData && categoriesData.length > 0) {
+            // Simple alphabetical sort
+            const sortedCategories = categoriesData
+                .map(cat => cat.name)
+                .sort();
+            
+            sortedCategories.forEach((categoryName) => {
+                options += `<div class="dropdown-option" data-value="${categoryName}">${categoryName}</div>`;
+            });
+        }
+        // No fallback - if database empty, dropdown empty (user can type custom)
+        
+        return { options };
+    }
+
     function initializeCustomDropdowns() {
         // Only initialize once globally using event delegation
         if (dropdownsInitialized) return;
         dropdownsInitialized = true;
+        
+        // Update category dropdown with database data
+        const { options } = buildCategoryOptions();
+        const categoryDropdown = document.querySelector('[data-field="category"]');
+        if (categoryDropdown) {
+            const menu = categoryDropdown.querySelector('.dropdown-menu');
+            if (menu) {
+                menu.innerHTML = options;
+            }
+        }
         
         // Use event delegation on the modal for all dropdown events
         modal.addEventListener('click', (e) => {
@@ -921,9 +951,20 @@
     
     function updateDropdownDisplay(fieldName, value) {
         const dropdown = document.querySelector(`[data-field="${fieldName}"]`);
-        if (!dropdown || !value) return;
+        if (!dropdown) return;
         
         const valueSpan = dropdown.querySelector('.dropdown-value');
+        
+        if (!value) {
+            // Show placeholder text for empty values
+            if (fieldName === 'category') {
+                valueSpan.textContent = 'category';
+            }
+            // Clear any selected states
+            dropdown.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('selected'));
+            return;
+        }
+        
         const option = dropdown.querySelector(`[data-value="${value}"]`);
         
         if (option && valueSpan) {
@@ -990,7 +1031,10 @@
         // Set default values for dropdowns
         subCycleField.value = 'monthly';
         subCurrencyField.value = 'NZD';
-        subCategoryField.value = 'streaming';
+        
+        // Set category to empty - show placeholder "category"
+        subCategoryField.value = '';
+        
         subStatusField.value = 'active';
         
         subNameField.focus();
@@ -1036,7 +1080,9 @@
         // Update dropdown displays
         updateDropdownDisplay('currency', subscription.currency || 'NZD');
         updateDropdownDisplay('billing_cycle', subscription.billing_cycle || 'monthly');
-        updateDropdownDisplay('category', subscription.category || 'streaming');
+        
+        updateDropdownDisplay('category', subscription.category || '');
+        
         updateDropdownDisplay('status', subscription.status || 'active');
         
         // Update floating label states after populating
@@ -1056,7 +1102,7 @@
             cost: formData.get('cost') || null,
             currency: formData.get('currency') || 'NZD',
             billing_cycle: formData.get('billing_cycle') || null,
-            category: formData.get('category') || 'streaming',
+            category: formData.get('category') || null,
             status: formData.get('status') || 'active',
             website_url: formData.get('website_url') || null,
             notes: formData.get('notes') || null

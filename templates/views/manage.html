@@ -886,12 +886,6 @@
         
         // Use event delegation on the modal for all dropdown events
         modal.addEventListener('click', (e) => {
-            // Let checkbox and label clicks pass through normally
-            if (e.target.type === 'checkbox' || 
-                (e.target.tagName === 'LABEL' && e.target.querySelector('input[type="checkbox"]'))) {
-                return; // Don't interfere with checkbox behavior
-            }
-            
             // Handle dropdown toggle
             const dropdown = e.target.closest('.custom-dropdown');
             if (dropdown && !e.target.closest('.dropdown-menu')) {

@@ -63,29 +63,35 @@
                 </div>
             </div>
             
-            <div class="form-field dropdown-field">
-                <div class="custom-dropdown" data-field="category">
-                    <span class="dropdown-value">category</span>
-                    <span class="dropdown-arrow">▼</span>
-                    <div class="dropdown-menu">
-                        <!-- Categories will be populated by JavaScript from database -->
+            <div class="form-row">
+                <div class="form-field category-field">
+                    <div class="custom-dropdown" data-field="category">
+                        <span class="dropdown-value">category</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <!-- Categories will be populated by JavaScript from database -->
+                        </div>
                     </div>
+                    <input type="hidden" id="sub-category" name="category" value="">
                 </div>
-                <input type="hidden" id="sub-category" name="category" value="">
+                <!-- Space for additional category field later -->
             </div>
             
-            <div class="form-field dropdown-field">
-                <div class="custom-dropdown" data-field="status">
-                    <span class="dropdown-value">active</span>
-                    <span class="dropdown-arrow">▼</span>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-option selected" data-value="active">active</div>
-                        <div class="dropdown-option" data-value="trial">trial</div>
-                        <div class="dropdown-option" data-value="paused">paused</div>
-                        <div class="dropdown-option" data-value="cancelled">cancelled</div>
+            <div class="form-row">
+                <div class="form-field status-field">
+                    <div class="custom-dropdown" data-field="status">
+                        <span class="dropdown-value">active</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option selected" data-value="active">active</div>
+                            <div class="dropdown-option" data-value="trial">trial</div>
+                            <div class="dropdown-option" data-value="paused">paused</div>
+                            <div class="dropdown-option" data-value="cancelled">cancelled</div>
+                        </div>
                     </div>
+                    <input type="hidden" id="sub-status" name="status" value="active">
                 </div>
-                <input type="hidden" id="sub-status" name="status" value="active">
+                <!-- Space for trial checkbox later -->
             </div>
             
             <div class="form-field">
@@ -428,6 +434,7 @@
         align-items: center;
         gap: 15%;  /* Percentage-based gap for responsive spacing */
         margin-bottom: 32px;
+        justify-content: flex-start;  /* Ensure left alignment */
     }
     
     .form-row .form-field {
@@ -439,7 +446,9 @@
     }
     
     .form-row .cycle-field,
-    .form-row .currency-field {
+    .form-row .currency-field,
+    .form-row .category-field,
+    .form-row .status-field {
         /* Auto width - fit to dropdown content */
     }
     

@@ -39,6 +39,14 @@ SQLite database schema for the Subscription Manager application.
                                               │ created_at (TIMESTAMP)          │
                                               │ updated_at (TIMESTAMP)          │
                                               └─────────────────────────────────┘
+
+┌─────────────────────────────────┐
+│          categories             │
+├─────────────────────────────────┤
+│ name (TEXT) PK                  │
+│ is_standard (BOOLEAN)           │
+│ created_at (TIMESTAMP)          │
+└─────────────────────────────────┘
 ```
 
 Note: Tables are independent - no formal foreign key relationships implemented
@@ -103,14 +111,24 @@ Note: Tables are independent - no formal foreign key relationships implemented
 | created_at        | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP         | When subscription was added                     |
 | updated_at        | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP         | Last update timestamp                            |
 
+### categories
+
+| Column      | Type      | Constraints                        | Description                                      |
+|-------------|-----------|-----------------------------------|--------------------------------------------------|
+| name        | TEXT      | PRIMARY KEY                       | Category name (e.g., "content", "productivity") |
+| is_standard | BOOLEAN   | DEFAULT 0                         | Whether this is a predefined standard category  |
+| created_at  | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP         | When category was first created                  |
+
 
 
 ## Relationships
 
 No formal foreign key relationships are implemented. Tables are independent but logically related:
 - `processed_emails.email` indicates which Gmail account fetched the email
-- `processed_emails.sender_domain` can be matched against `subscriptions.domains` (JSON array)
+- `processed_emails.sender_domain` can be matched against `subscriptions.domains` (JSON array)  
+- `subscriptions.category` can be matched against `categories.name` for category management
 - Domain matching happens at query time rather than through database constraints
+- Category validation happens at the application layer, not through database constraints
 
 ## Key Design Principles
 

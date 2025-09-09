@@ -381,6 +381,13 @@ class SubscriptionManager:
             )
         ''')
         
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                name TEXT PRIMARY KEY,
+                is_standard BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
         # Create indexes for better query performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_gmail_message_id ON processed_emails(gmail_message_id)')
@@ -436,6 +443,18 @@ class SubscriptionManager:
             cursor.execute('ALTER TABLE connections DROP COLUMN history_id')
         except sqlite3.OperationalError:
             pass
+        
+        # Initialize standard categories if table is empty
+        cursor.execute('SELECT COUNT(*) FROM categories')
+        if cursor.fetchone()[0] == 0:
+            standard_categories = [
+                'content', 'productivity', 'health', 'other'
+            ]
+            for category in standard_categories:
+                cursor.execute('''
+                    INSERT INTO categories (name, is_standard)
+                    VALUES (?, 1)
+                ''', (category,))
         
         conn.commit()
         conn.close()
@@ -964,6 +983,20 @@ class SubscriptionManager:
                 
             return True
 
+    @handle_db_errors(default_return=[])
+    def get_categories(self):
+        """Get all categories ordered by standard categories first, then alphabetically"""
+        with self.db_connection(timeout=5.0) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT name, is_standard, created_at
+                FROM categories 
+                ORDER BY is_standard DESC, name ASC
+            ''')
+            columns = [desc[0] for desc in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return results
+
     @handle_db_errors(default_return=0)
     def get_email_count(self):
         """Get total count of processed emails with timeout handling"""
@@ -1394,6 +1427,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         import json
         
         subscriptions = self.sm.get_subscriptions()
+        categories = self.sm.get_categories()
         
         # Prepare JSON-safe data for embedding (remove BLOB data for JSON serialization)
         json_safe_subscriptions = [
@@ -1402,6 +1436,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         ]
         
         subscriptions_json = json.dumps(json_safe_subscriptions)
+        categories_json = json.dumps(categories)
         
         # Generate subscription cards or empty state
         subscription_cards = ""
@@ -1453,7 +1488,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         return self.render_template('views/manage.html',
             subscription_cards=subscription_cards,
-            embedded_subscriptions=subscriptions_json
+            embedded_subscriptions=subscriptions_json,
+            embedded_categories=categories_json
         )
     
     def get_emails_content(self):
@@ -1836,7 +1872,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 # Bulk update - update multiple fields
                 success = True
                 website_url_updated = False
-                for field in ['name', 'cost', 'currency', 'billing_cycle', 'notes', 'website_url']:
+                for field in ['name', 'cost', 'currency', 'billing_cycle', 'category', 'status', 'notes', 'website_url']:
                     if field in data:
                         value = data[field]
                         # Skip empty values for optional fields

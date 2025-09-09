@@ -63,6 +63,37 @@
                 </div>
             </div>
             
+            <div class="form-field dropdown-field">
+                <div class="custom-dropdown" data-field="category">
+                    <span class="dropdown-value">streaming</span>
+                    <span class="dropdown-arrow">▼</span>
+                    <div class="dropdown-menu">
+                        <div class="dropdown-option selected" data-value="streaming">streaming</div>
+                        <div class="dropdown-option" data-value="software">software</div>
+                        <div class="dropdown-option" data-value="news">news</div>
+                        <div class="dropdown-option" data-value="productivity">productivity</div>
+                        <div class="dropdown-option" data-value="entertainment">entertainment</div>
+                        <div class="dropdown-option" data-value="education">education</div>
+                        <div class="dropdown-option" data-value="other">other</div>
+                    </div>
+                </div>
+                <input type="hidden" id="sub-category" name="category" value="streaming">
+            </div>
+            
+            <div class="form-field dropdown-field">
+                <div class="custom-dropdown" data-field="status">
+                    <span class="dropdown-value">active</span>
+                    <span class="dropdown-arrow">▼</span>
+                    <div class="dropdown-menu">
+                        <div class="dropdown-option selected" data-value="active">active</div>
+                        <div class="dropdown-option" data-value="trial">trial</div>
+                        <div class="dropdown-option" data-value="paused">paused</div>
+                        <div class="dropdown-option" data-value="cancelled">cancelled</div>
+                    </div>
+                </div>
+                <input type="hidden" id="sub-status" name="status" value="active">
+            </div>
+            
             <div class="form-field">
                 <label for="sub-website">website</label>
                 <input type="url" id="sub-website" name="website_url" autocomplete="off">
@@ -331,6 +362,7 @@
     
     .form-field input[type="text"],
     .form-field input[type="url"],
+    .form-field input[type="date"],
     .form-field textarea {
         border: none;
         border-bottom: 1px solid #e0e0e0;
@@ -342,12 +374,20 @@
         outline: none;
         transition: border-bottom-color 0.2s ease;
         color: #999;
+        width: 100%;
     }
     
     .form-field input[type="text"]:focus,
     .form-field input[type="url"]:focus,
+    .form-field input[type="date"]:focus,
     .form-field textarea:focus {
         border-bottom-color: #ccc;
+    }
+    
+    /* Style date input consistently */
+    .form-field input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: opacity(0.5);
+        cursor: pointer;
     }
     
     .form-field textarea {
@@ -469,6 +509,15 @@
     
     .dropdown-option.selected {
         background-color: rgba(0,0,0,0.1);
+    }
+    
+    /* Special field types that don't need labels */
+    .form-field.dropdown-field {
+        margin-bottom: 32px;
+    }
+    
+    .form-field.dropdown-field label {
+        display: none;
     }
     
     .form-actions {
@@ -620,6 +669,29 @@
 </style>
 
 <script>
+    // Cache DOM elements at module level to avoid repeated queries
+    let modal;
+    let deleteConfirmationModal;
+    let form;
+    let addBtn;
+    let closeBtn;
+    let submitBtn;
+    let deleteBtn;
+    let confirmDeleteBtn;
+    let cancelDeleteBtn;
+    let deleteConfirmationMessage;
+    
+    // Form field caches
+    let subscriptionIdField;
+    let subNameField;
+    let subCostField;
+    let subCurrencyField;
+    let subCycleField;
+    let subCategoryField;
+    let subStatusField;
+    let subWebsiteField;
+    let subNotesField;
+    
     // Use embedded subscription data instead of AJAX call with error handling
     let subscriptionsData;
     try {
@@ -640,12 +712,33 @@
     }
     
     function initializeSubscriptionManager() {
-        const modal = document.getElementById('subscription-modal');
-        const addBtn = document.getElementById('add-btn');
-        const closeBtn = document.getElementById('modal-close');
-        const form = document.getElementById('subscription-form');
+        // Cache all DOM elements once to avoid repeated queries
+        modal = document.getElementById('subscription-modal');
+        deleteConfirmationModal = document.getElementById('delete-confirmation-modal');
+        form = document.getElementById('subscription-form');
+        addBtn = document.getElementById('add-btn');
+        closeBtn = document.getElementById('modal-close');
+        submitBtn = document.getElementById('submit-btn');
+        deleteBtn = document.getElementById('delete-btn');
+        confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+        cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        deleteConfirmationMessage = document.getElementById('delete-confirmation-message');
+        
+        // Cache form field elements
+        subscriptionIdField = document.getElementById('subscription-id');
+        subNameField = document.getElementById('sub-name');
+        subCostField = document.getElementById('sub-cost');
+        subCurrencyField = document.getElementById('sub-currency');
+        subCycleField = document.getElementById('sub-cycle');
+        subCategoryField = document.getElementById('sub-category');
+        subStatusField = document.getElementById('sub-status');
+        subWebsiteField = document.getElementById('sub-website');
+        subNotesField = document.getElementById('sub-notes');
         
         // Data is already available - no need to fetch
+        
+        // Initialize dropdowns once globally with event delegation
+        initializeCustomDropdowns();
         
         // Add subscription button click
         addBtn.addEventListener('click', () => {
@@ -679,14 +772,10 @@
         // Form submission
         form.addEventListener('submit', handleFormSubmit);
         
-        // Delete button click
-        const deleteBtn = document.getElementById('delete-btn');
+        // Delete button click (using cached reference)
         deleteBtn.addEventListener('click', handleDeleteClick);
         
-        // Delete confirmation handlers
-        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
-        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
-        const deleteConfirmationModal = document.getElementById('delete-confirmation-modal');
+        // Delete confirmation handlers (using cached references)
         
         confirmDeleteBtn.addEventListener('click', handleConfirmDelete);
         cancelDeleteBtn.addEventListener('click', closeDeleteConfirmation);
@@ -707,6 +796,7 @@
     }
     
     let labelsInitialized = false;
+    let dropdownsInitialized = false;
     
     function initializeFloatingLabels() {
         // Only initialize once to avoid duplicate event listeners
@@ -736,34 +826,39 @@
         
         labelsInitialized = true;
         updateFloatingLabelStates();
-        
-        // Initialize custom dropdowns
-        initializeCustomDropdowns();
     }
     
     function initializeCustomDropdowns() {
-        const dropdowns = document.querySelectorAll('.custom-dropdown');
+        // Only initialize once globally using event delegation
+        if (dropdownsInitialized) return;
+        dropdownsInitialized = true;
         
-        dropdowns.forEach(dropdown => {
-            // Click to toggle dropdown
-            dropdown.addEventListener('click', (e) => {
+        // Use event delegation on the modal for all dropdown events
+        modal.addEventListener('click', (e) => {
+            // Handle dropdown toggle
+            const dropdown = e.target.closest('.custom-dropdown');
+            if (dropdown && !e.target.closest('.dropdown-menu')) {
                 e.stopPropagation();
                 toggleDropdown(dropdown);
-            });
+                return;
+            }
             
             // Handle option selection
-            const options = dropdown.querySelectorAll('.dropdown-option');
-            options.forEach(option => {
-                option.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    selectOption(dropdown, option);
-                });
-            });
+            const option = e.target.closest('.dropdown-option');
+            if (option) {
+                e.stopPropagation();
+                const parentDropdown = option.closest('.custom-dropdown');
+                selectOption(parentDropdown, option);
+                return;
+            }
         });
         
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', () => {
-            closeAllDropdowns();
+        // Close dropdowns when clicking outside - use setTimeout to avoid race condition
+        document.addEventListener('click', (e) => {
+            // Don't close if clicking inside a dropdown
+            if (!e.target.closest('.custom-dropdown')) {
+                setTimeout(() => closeAllDropdowns(), 0);
+            }
         });
     }
     
@@ -790,7 +885,22 @@
         valueSpan.textContent = text;
         
         // Update hidden input for form submission
-        const hiddenInput = document.getElementById(field === 'billing_cycle' ? 'sub-cycle' : 'sub-currency');
+        let hiddenInput;
+        switch (field) {
+            case 'billing_cycle':
+                hiddenInput = subCycleField;
+                break;
+            case 'currency':
+                hiddenInput = subCurrencyField;
+                break;
+            case 'category':
+                hiddenInput = subCategoryField;
+                break;
+            case 'status':
+                hiddenInput = subStatusField;
+                break;
+        }
+        
         if (hiddenInput) {
             hiddenInput.value = value;
         }
@@ -853,14 +963,11 @@
     
     
     function openModal(mode, subscriptionId = null) {
-        const modal = document.getElementById('subscription-modal');
-        const submitBtn = document.getElementById('submit-btn');
-        const deleteBtn = document.getElementById('delete-btn');
-        const form = document.getElementById('subscription-form');
+        // Use cached DOM references instead of querying again
         
         // Reset form
         form.reset();
-        document.getElementById('subscription-id').value = '';
+        subscriptionIdField.value = '';
         
         if (mode === 'add') {
             submitBtn.textContent = 'Add';
@@ -881,14 +988,16 @@
         initializeFloatingLabels();
         
         // Set default values for dropdowns
-        document.getElementById('sub-cycle').value = 'monthly';
-        document.getElementById('sub-currency').value = 'NZD';
+        subCycleField.value = 'monthly';
+        subCurrencyField.value = 'NZD';
+        subCategoryField.value = 'streaming';
+        subStatusField.value = 'active';
         
-        document.getElementById('sub-name').focus();
+        subNameField.focus();
     }
     
     function closeModal() {
-        const modal = document.getElementById('subscription-modal');
+        // Use cached modal reference instead of querying again
         modal.classList.remove('visible');
     }
     
@@ -906,25 +1015,29 @@
         }
         
         // Populate all form fields with complete database data
-        document.getElementById('subscription-id').value = subscriptionId;
-        document.getElementById('sub-name').value = subscription.name || '';
+        subscriptionIdField.value = subscriptionId;
+        subNameField.value = subscription.name || '';
         
         // Clean cost field - remove $ symbol if present
         let costValue = subscription.cost || '';
         if (typeof costValue === 'string') {
             costValue = costValue.replace('$', '');
         }
-        document.getElementById('sub-cost').value = costValue;
+        subCostField.value = costValue;
         
-        // Update hidden inputs
-        document.getElementById('sub-currency').value = subscription.currency || '';
-        document.getElementById('sub-cycle').value = subscription.billing_cycle || '';
-        document.getElementById('sub-website').value = subscription.website_url || '';
-        document.getElementById('sub-notes').value = subscription.notes || '';
+        // Update hidden inputs and form fields
+        subCurrencyField.value = subscription.currency || '';
+        subCycleField.value = subscription.billing_cycle || '';
+        subCategoryField.value = subscription.category || '';
+        subStatusField.value = subscription.status || '';
+        subWebsiteField.value = subscription.website_url || '';
+        subNotesField.value = subscription.notes || '';
         
         // Update dropdown displays
         updateDropdownDisplay('currency', subscription.currency || 'NZD');
         updateDropdownDisplay('billing_cycle', subscription.billing_cycle || 'monthly');
+        updateDropdownDisplay('category', subscription.category || 'streaming');
+        updateDropdownDisplay('status', subscription.status || 'active');
         
         // Update floating label states after populating
         updateFloatingLabelStates();
@@ -943,6 +1056,8 @@
             cost: formData.get('cost') || null,
             currency: formData.get('currency') || 'NZD',
             billing_cycle: formData.get('billing_cycle') || null,
+            category: formData.get('category') || 'streaming',
+            status: formData.get('status') || 'active',
             website_url: formData.get('website_url') || null,
             notes: formData.get('notes') || null
         };
@@ -1010,7 +1125,7 @@
     let subscriptionToDelete = null;
     
     function handleDeleteClick() {
-        const subscriptionId = document.getElementById('subscription-id').value;
+        const subscriptionId = subscriptionIdField.value;
         if (!subscriptionId) {
             showToast('No subscription selected for deletion', 'error');
             return;
@@ -1026,16 +1141,15 @@
     }
     
     function showDeleteConfirmation(subscriptionName) {
-        const modal = document.getElementById('delete-confirmation-modal');
-        const message = document.getElementById('delete-confirmation-message');
+        // Use cached modal reference for delete confirmation
         
-        message.textContent = `Are you sure you want to delete "${subscriptionName}"? This action cannot be undone.`;
-        modal.classList.add('visible');
+        deleteConfirmationMessage.textContent = `Are you sure you want to delete "${subscriptionName}"? This action cannot be undone.`;
+        deleteConfirmationModal.classList.add('visible');
     }
     
     function closeDeleteConfirmation() {
-        const modal = document.getElementById('delete-confirmation-modal');
-        modal.classList.remove('visible');
+        // Use cached modal reference instead of querying again
+        deleteConfirmationModal.classList.remove('visible');
         subscriptionToDelete = null;
     }
     

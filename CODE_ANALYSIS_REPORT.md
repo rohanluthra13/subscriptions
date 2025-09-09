@@ -83,17 +83,19 @@ data = {
 - **After**: Single decorator definition with flexible parameters for different error behaviors
 - **Benefits**: Centralized error handling, easier maintenance, consistent error messages
 
-### 2. Cost Parsing Logic Duplication
+### 2. ~~Cost Parsing Logic Duplication~~ ✅ FIXED
 **Impact**: MEDIUM - Maintainability
-- **Server**: Complex cost formatting in home view (1138-1145) and manage view (1207-1220)
+- **Server**: ~~Complex cost formatting in home view (1138-1145) and manage view (1207-1220)~~
 - **Client**: Similar cost cleaning logic in `populateForm()` (757-762)
-- **Impact**: Same business logic implemented 3 times with slight variations
+- **Impact**: ~~Same business logic implemented 3 times with slight variations~~
+- **FIX APPLIED**: Created CostUtils class with specialized methods for different contexts
 
-### 3. JSON Response Pattern Redundancy
+### 3. ~~JSON Response Pattern Redundancy~~ ✅ FIXED
 **Impact**: LOW - Code Quality
-- **Unused Helper**: `send_json_response()` method exists (line 980) but not consistently used
-- **Manual Construction**: 6+ locations manually build JSON responses
-- **Locations**: Lines 1662-1666, 1692-1700, 1703-1706, 1737-1745, 1775-1779, 1788-1792
+- **Unused Helper**: ~~`send_json_response()` method exists (line 980) but not consistently used~~
+- **Manual Construction**: ~~6+ locations manually build JSON responses~~
+- **Locations**: ~~Lines 1662-1666, 1692-1700, 1703-1706, 1737-1745, 1775-1779, 1788-1792~~
+- **FIX APPLIED**: Replaced all manual JSON construction with consistent helper method calls
 
 ---
 
@@ -203,8 +205,25 @@ const modal = document.getElementById('subscription-modal'); // Line 736
    - Flexible error behavior (return defaults vs raise exceptions)
    - Improved maintainability and consistency
 
+8. **Cost Parsing Logic Consolidation** - COMPLETED
+   - Created CostUtils class with three specialized methods
+   - `parse_cost_for_calculation()` - Returns float for mathematical operations  
+   - `format_cost_for_display()` - Returns formatted strings for UI display
+   - `clean_cost_for_input()` - Returns clean strings for form inputs
+   - Eliminated 23 lines of duplicate code across home and manage views
+   - Single source of truth for cost handling logic
+   - Prepared for future currency support enhancements
+
+9. **JSON Response Pattern Consolidation** - COMPLETED
+   - Replaced all manual JSON construction with `send_json_response()` helper method
+   - Consolidated 8 manual construction locations across 5 handler methods
+   - Eliminated ~40 lines of duplicate JSON response code
+   - Consistent response formatting across all API endpoints
+   - Preserved exact HTTP status codes (200, 201, 400, 500)
+   - Zero functional changes - pure code quality improvement
+
 ### New Issues Discovered
-8. **Additional Security Concerns**
+10. **Additional Security Concerns**
    - Missing Content Security Policy headers
    - No input length validation on text fields
    - Template validation gaps
@@ -220,7 +239,7 @@ const modal = document.getElementById('subscription-modal'); // Line 736
 ### High Priority (Fix This Month)  
 3. ~~**Fix N+1 Query Pattern**~~ - ⚠️ Downgraded to monitoring (performs well)
 4. ~~**Consolidate Database Error Handling**~~ - ✅ Fixed with decorator pattern
-5. **Use Existing JSON Response Helper** - Improve code consistency
+5. ~~**Use Existing JSON Response Helper**~~ - ✅ Fixed with consistent helper method calls
 
 ### Medium Priority (Fix Next Month)
 6. **Implement CSS Custom Properties** - Improve design system
@@ -229,7 +248,7 @@ const modal = document.getElementById('subscription-modal'); // Line 736
 9. **Fix State Synchronization** - Remove page reload dependency
 
 ### Low Priority (Technical Debt)
-10. **Extract Cost Parsing Logic** - Single source of truth
+10. ~~**Extract Cost Parsing Logic**~~ - ✅ Fixed with CostUtils class
 11. **Implement Connection Pooling** - Future scalability
 12. **Add Event Handler Cleanup** - Memory management
 
@@ -267,15 +286,15 @@ const modal = document.getElementById('subscription-modal'); // Line 736
 - **Architectural Conflicts**: 8
 - **Maintainability Concerns**: 15+
 
-### After Third Round of Fixes (2025-09-08)
+### After Fifth Round of Fixes (2025-09-08)
 - **Critical Issues Fixed**: 4 (Double data fetching, JSON injection, Currency mismatch, Website URL)
-- **Code Quality Improvements**: 2 (Dead code removal, Database error handling consolidation)
+- **Code Quality Improvements**: 4 (Dead code removal, Database error handling consolidation, Cost parsing consolidation, JSON response consolidation)
 - **Issues Downgraded**: 1 (N+1 query pattern from critical to monitoring)
-- **Lines of Code Removed**: 83 (dead code) + 18 (duplicate error handling)
+- **Lines of Code Removed**: 83 (dead code) + 18 (duplicate error handling) + 23 (cost parsing duplication) + 40 (JSON response duplication)
 - **Performance Improvement**: 50% reduction in HTTP requests
-- **Maintainability Improvement**: Centralized error handling across 6 database methods
+- **Maintainability Improvement**: Centralized error handling across 6 database methods, unified cost parsing logic, consistent JSON response formatting
 - **Remaining Critical Issues**: 0
-- **Remaining High Priority Issues**: 1 (JSON response helper consolidation)
+- **Remaining High Priority Issues**: 0
 
 **Overall Code Health**: 🟡 Moderate → 🟢 Good (improved, with known issues documented)
 

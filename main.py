@@ -1742,19 +1742,12 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 f.write(content)
             
             # Return success response for AJAX
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"success": true}')
+            self.send_json_response({"success": True}, status=200)
             
         except Exception as e:
             print(f"Error saving notepad: {e}")
             # Return error response
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            error_msg = json.dumps({"success": False, "error": str(e)})
-            self.wfile.write(error_msg.encode())
+            self.send_json_response({"success": False, "error": str(e)}, status=500)
 
     def handle_review_save(self):
         """Handle saving review form data back to llm_notes.md"""
@@ -1804,21 +1797,14 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             
             if success:
                 # Return success response
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(b'{"success": true}')
+                self.send_json_response({"success": True}, status=200)
             else:
                 raise Exception("Failed to update llm_notes.md file")
                 
         except Exception as e:
             print(f"Error saving review: {e}")
             # Return error response
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            error_msg = json.dumps({"success": False, "error": str(e)})
-            self.wfile.write(error_msg.encode())
+            self.send_json_response({"success": False, "error": str(e)}, status=500)
 
     def start_gmail_auth(self):
         """Redirect to Gmail OAuth"""
@@ -1837,11 +1823,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             subscription_id = data.get('id')
             
             if not subscription_id:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {'success': False, 'error': 'Missing subscription id'}
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response({'success': False, 'error': 'Missing subscription id'}, status=400)
                 return
             
             # Check if this is a single field update or bulk update
@@ -1866,24 +1848,12 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                         if field == 'website_url' and value:
                             website_url_updated = True
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': True, 'message': 'Subscription updated successfully'}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': True, 'message': 'Subscription updated successfully'}, status=200)
             
         except ValueError as e:
-            self.send_response(400)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': False, 'error': str(e)}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': False, 'error': str(e)}, status=400)
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': False, 'error': f'Server error: {str(e)}'}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
 
     def handle_subscription_create(self):
         """Handle subscription creation requests"""
@@ -1896,34 +1866,19 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             new_subscription = self.sm.create_subscription(data)
             
             if new_subscription:
-                self.send_response(201)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
                 response = {
                     'success': True, 
                     'message': 'Subscription created successfully',
                     'subscription': new_subscription
                 }
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, status=201)
             else:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {'success': False, 'error': 'Failed to create subscription'}
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response({'success': False, 'error': 'Failed to create subscription'}, status=500)
                 
         except ValueError as e:
-            self.send_response(400)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': False, 'error': str(e)}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': False, 'error': str(e)}, status=400)
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': False, 'error': f'Server error: {str(e)}'}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
 
     # REMOVED: handle_subscriptions_list() method - no longer needed after embedding data fix
     # The manage view now embeds subscription data directly in HTML instead of using AJAX
@@ -1938,34 +1893,18 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             subscription_id = data.get('id')
             
             if not subscription_id:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {'success': False, 'error': 'Missing required field: id'}
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response({'success': False, 'error': 'Missing required field: id'}, status=400)
                 return
             
             # Delete the subscription
             success = self.sm.delete_subscription(subscription_id)
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': True, 'message': 'Subscription deleted successfully'}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': True, 'message': 'Subscription deleted successfully'}, status=200)
             
         except ValueError as e:
-            self.send_response(400)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': False, 'error': str(e)}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': False, 'error': str(e)}, status=400)
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {'success': False, 'error': f'Server error: {str(e)}'}
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
 
     def handle_oauth_callback(self, params):
         """Handle OAuth callback from Gmail"""

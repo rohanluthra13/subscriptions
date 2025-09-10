@@ -1323,14 +1323,17 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                         yearly_total += cost
                         monthly_total += cost / 12
             
-            # Generate bullet list content
+            # Generate bullet list content with consistent cost formatting
+            monthly_display = CostUtils.format_cost_for_display(monthly_total)
+            yearly_display = CostUtils.format_cost_for_display(yearly_total)
+            
             content = f'''
             <div style="padding: 60px 0;">
                 <h2>what am i paying for</h2>
                 <ul style="font-size: 14px; line-height: 1.6; list-style: none; padding: 0; margin-top: 30px;">
                     <li style="margin-bottom: 12px;">• {active_count} subscriptions</li>
-                    <li style="margin-bottom: 12px;">• ${monthly_total:.2f} per month</li>
-                    <li style="margin-bottom: 12px;">• ${yearly_total:.2f} per year</li>
+                    <li style="margin-bottom: 12px;">• {monthly_display} per month</li>
+                    <li style="margin-bottom: 12px;">• {yearly_display} per year</li>
                 </ul>
             </div>
             '''

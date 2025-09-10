@@ -96,10 +96,19 @@
             
             <div class="form-row">
                 <div class="form-field renewing-field">
-                    <label for="sub-renewing" style="position: static; display: flex; align-items: center; gap: 8px; font-size: 14px; color: #999; pointer-events: auto;">
-                        renewing?
-                        <input type="checkbox" id="sub-renewing" name="renewing" checked>
-                    </label>
+                    <div class="renewing-toggle">
+                        <span class="toggle-label">renewing?</span>
+                        <input type="hidden" id="sub-renewing" name="renewing" value="true">
+                        <span class="toggle-icons">
+                            <svg class="icon-option icon-check" data-value="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <svg class="icon-option icon-x" data-value="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </span>
+                    </div>
                 </div>
             </div>
             
@@ -679,6 +688,41 @@
             opacity: 1;
         }
     }
+    
+    /* Renewing toggle styles */
+    .renewing-toggle {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+    }
+    
+    .toggle-label {
+        color: #999;
+    }
+    
+    .toggle-icons {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .icon-option {
+        cursor: pointer;
+        color: #e0e0e0;
+        transition: color 0.2s ease;
+    }
+    
+    .icon-option.icon-check.active {
+        color: #2E6F40;
+    }
+    
+    .icon-option.icon-x.active {
+        color: #C04000;
+    }
+    
+    .icon-option:not(.active):hover {
+        color: #ccc;
+    }
 </style>
 
 <script>
@@ -761,6 +805,9 @@
         
         // Initialize dropdowns once globally with event delegation
         initializeCustomDropdowns();
+        
+        // Initialize renewing toggle icons
+        initializeRenewingToggle();
         
         // Add subscription button click
         addBtn.addEventListener('click', () => {
@@ -970,6 +1017,35 @@
         });
     }
     
+    // Initialize renewing toggle functionality
+    function initializeRenewingToggle() {
+        // Use event delegation on modal for icon clicks
+        modal.addEventListener('click', (e) => {
+            const icon = e.target.closest('.icon-option');
+            if (icon) {
+                const value = icon.dataset.value;
+                subRenewingField.value = value;
+                updateRenewingIcons(value === 'true');
+            }
+        });
+    }
+    
+    // Update visual state of renewing icons
+    function updateRenewingIcons(isRenewing) {
+        const checkIcon = document.querySelector('.icon-check');
+        const xIcon = document.querySelector('.icon-x');
+        
+        if (checkIcon && xIcon) {
+            if (isRenewing) {
+                checkIcon.classList.add('active');
+                xIcon.classList.remove('active');
+            } else {
+                checkIcon.classList.remove('active');
+                xIcon.classList.add('active');
+            }
+        }
+    }
+    
     function updateDropdownDisplay(fieldName, value) {
         const dropdown = document.querySelector(`[data-field="${fieldName}"]`);
         if (!dropdown) return;
@@ -1034,6 +1110,15 @@
         if (mode === 'add') {
             submitBtn.textContent = 'Add';
             deleteBtn.style.display = 'none'; // Hide delete button for new subscriptions
+            
+            // Set default values for new subscriptions only
+            subCycleField.value = 'monthly';
+            subCurrencyField.value = 'NZD';
+            subCategoryField.value = '';
+            subStatusField.value = 'active';
+            subRenewingField.value = 'true'; // Default to true
+            updateRenewingIcons(true); // Update visual state
+            
         } else if (mode === 'edit') {
             submitBtn.textContent = 'Save';
             deleteBtn.style.display = 'flex'; // Show delete button for existing subscriptions
@@ -1048,16 +1133,6 @@
         
         // Initialize floating labels when modal opens
         initializeFloatingLabels();
-        
-        // Set default values for dropdowns
-        subCycleField.value = 'monthly';
-        subCurrencyField.value = 'NZD';
-        
-        // Set category to empty - show placeholder "category"
-        subCategoryField.value = '';
-        
-        subStatusField.value = 'active';
-        subRenewingField.checked = true; // Default to checked
         
         subNameField.focus();
     }
@@ -1096,7 +1171,9 @@
         subCycleField.value = subscription.billing_cycle || '';
         subCategoryField.value = subscription.category || '';
         subStatusField.value = subscription.status || '';
-        subRenewingField.checked = subscription.auto_renewing !== false; // Default to true if undefined
+        const isRenewing = Boolean(subscription.auto_renewing); // Convert 0/1 to false/true
+        subRenewingField.value = isRenewing ? 'true' : 'false';
+        updateRenewingIcons(isRenewing);
         subWebsiteField.value = subscription.website_url || '';
         subNotesField.value = subscription.notes || '';
         
@@ -1127,7 +1204,7 @@
             billing_cycle: formData.get('billing_cycle') || null,
             category: formData.get('category') || null,
             status: formData.get('status') || 'active',
-            auto_renewing: formData.get('renewing') === 'on',
+            auto_renewing: formData.get('renewing') === 'true',
             website_url: formData.get('website_url') || null,
             notes: formData.get('notes') || null
         };

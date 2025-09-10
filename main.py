@@ -1872,7 +1872,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 # Bulk update - update multiple fields
                 success = True
                 website_url_updated = False
-                for field in ['name', 'cost', 'currency', 'billing_cycle', 'category', 'status', 'notes', 'website_url']:
+                for field in ['name', 'cost', 'currency', 'billing_cycle', 'category', 'status', 'auto_renewing', 'notes', 'website_url']:
                     if field in data:
                         value = data[field]
                         # Skip empty values for optional fields

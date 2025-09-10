@@ -20,6 +20,9 @@ from email.utils import parsedate_to_datetime
 import time
 from contextlib import contextmanager
 
+# Import utility modules
+from utils.cost import CostUtils
+
 # Load environment variables
 load_dotenv()
 
@@ -202,72 +205,7 @@ def handle_db_errors(default_return=None, should_raise=False):
         return wrapper
     return decorator
 
-class CostUtils:
-    """Utility class for consistent cost parsing across all contexts"""
-    
-    @staticmethod
-    def parse_cost_for_calculation(cost_raw):
-        """
-        Parse cost for mathematical calculations (returns float)
-        Used in dashboard totals and financial calculations
-        
-        Args:
-            cost_raw: Raw cost value (string, number, or None)
-            
-        Returns:
-            float: Clean numeric value for calculations, 0.0 if invalid
-        """
-        if not cost_raw:
-            return 0.0
-        try:
-            if isinstance(cost_raw, str):
-                # Remove $ symbols and whitespace, handle empty strings
-                clean_str = cost_raw.replace('$', '').strip()
-                return float(clean_str) if clean_str else 0.0
-            return float(cost_raw)
-        except (ValueError, TypeError):
-            return 0.0
-    
-    @staticmethod
-    def format_cost_for_display(cost_raw):
-        """
-        Format cost for user display (returns formatted string)
-        Used in subscription cards and UI display elements
-        
-        Args:
-            cost_raw: Raw cost value (string, number, or None)
-            
-        Returns:
-            str: Formatted display string like "$15.99" or "?" for zero/empty
-        """
-        if not cost_raw:
-            return "?"
-        try:
-            # Remove existing $ symbols and convert to float
-            cost_str = str(cost_raw).replace('$', '').strip()
-            cost_value = float(cost_str) if cost_str else 0
-            # Format with $ prefix if positive, otherwise show "?"
-            return f"${cost_value:.2f}" if cost_value > 0 else "?"
-        except (ValueError, TypeError):
-            return "?"
-    
-    @staticmethod
-    def clean_cost_for_input(cost_raw):
-        """
-        Clean cost for form input fields (returns string without $)
-        Used when populating form inputs for editing
-        
-        Args:
-            cost_raw: Raw cost value (string, number, or None)
-            
-        Returns:
-            str: Clean string value suitable for input fields
-        """
-        if not cost_raw:
-            return ''
-        if isinstance(cost_raw, str):
-            return cost_raw.replace('$', '').strip()
-        return str(cost_raw)
+# CostUtils class moved to utils/cost.py
 
 class JobManager:
     """Manages background jobs for long-running operations"""

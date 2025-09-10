@@ -14,6 +14,28 @@ High-level steps to get there
 
 ## Technical Decisions
 
+### Data handling standards/mapping (2025-09-10)
+
+**Decision**: Two-tier mapping approach with tier 1 universal rules and tier 2 business logic exceptions
+
+**Mappings**: 
+
+**Tier 1: Universal Rules (Standard Flow)**
+- SQLite INTEGER (boolean) → JSON boolean → JS boolean
+- SQLite REAL → JSON number → JS number  
+- SQLite TEXT → JSON string → JS string
+- SQLite BLOB → Base64 string → JS string (with metadata)
+- SQLite NULL → JSON null → JS null
+
+**Tier 2: Field-Specific Exceptions (Business Logic)**
+- `cost` (REAL) → JSON string → JS string → parseFloat() *[precision preservation]*
+- `timestamps` (TEXT) → JSON string (ISO) → JS Date() *[timezone consistency]*
+- `domains` (TEXT array) → JSON string array → JS Array *[SQLite limitation workaround]*
+
+**Rationale**: Eliminates conversion inconsistencies causing UI bugs (e.g., boolean 0/1 → true/false). Universal rules handle 90% of cases, exceptions preserve business logic requirements without compromising data integrity.
+
+**Implementation**: Utility class pattern with centralized type handling, following existing CostUtils precedent.
+
 ### N+1 Query Pattern in Email Processing (2025-09-08)
 
 **Decision**: Keep current implementation, downgrade from critical to monitoring

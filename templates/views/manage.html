@@ -1228,10 +1228,10 @@
             if (result.success) {
                 closeModal();
                 showToast('Subscription saved successfully', 'success');
-                // Reload the page to show updated data
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                // Update cards without page reload
+                setTimeout(async () => {
+                    await refreshSubscriptionCards();
+                }, 500);
             } else {
                 showToast(result.error || 'Failed to save subscription', 'error');
             }
@@ -1322,10 +1322,10 @@
                 closeModal();
                 showToast('Subscription deleted successfully', 'success');
                 
-                // Reload the page to show updated data
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                // Update cards without page reload
+                setTimeout(async () => {
+                    await refreshSubscriptionCards();
+                }, 500);
             } else {
                 showToast(result.error || 'Failed to delete subscription', 'error');
             }
@@ -1333,5 +1333,43 @@
             console.error('Network error:', error);
             showToast('Failed to delete subscription. Please try again.', 'error');
         }
+    }
+    
+    // HTML-over-the-wire fragment update functions
+    async function refreshSubscriptionCards() {
+        try {
+            // Fetch updated cards HTML from server
+            const response = await fetch('/api/fragment/subscription-cards');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const html = await response.text();
+            
+            // Replace just the cards container content
+            const container = document.getElementById('subscription-cards');
+            container.innerHTML = html;
+            
+            // Re-attach clean event listeners to new cards
+            attachCardEventListeners();
+            
+        } catch (error) {
+            console.error('Failed to refresh subscription cards:', error);
+            // Graceful fallback - reload if fragment fetch fails
+            window.location.reload();
+        }
+    }
+    
+    function attachCardEventListeners() {
+        // Get fresh cards after HTML replacement
+        const cards = document.querySelectorAll('.subscription-card');
+        
+        // Attach clean event listeners (no memory leak)
+        cards.forEach(card => {
+            card.addEventListener('click', () => {
+                const subscriptionId = card.dataset.subscriptionId;
+                openModal('edit', subscriptionId);
+            });
+        });
     }
 </script>

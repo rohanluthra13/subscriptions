@@ -1245,6 +1245,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         elif path.startswith('/api/view/'):
             view_name = path.split('/')[-1]
             self.serve_view_fragment(view_name)
+        elif path == '/api/fragment/subscription-cards':
+            self.serve_subscription_cards_fragment()
         elif path == '/status':
             self.handle_status_api()
         elif path == '/auth/gmail':
@@ -1491,6 +1493,72 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             embedded_subscriptions=subscriptions_json,
             embedded_categories=categories_json
         )
+    
+    def serve_subscription_cards_fragment(self):
+        """Return just the subscription cards HTML fragment for AJAX updates"""
+        try:
+            import html
+            
+            # Get fresh subscription data from database
+            subscriptions = self.sm.get_subscriptions()
+            
+            # Generate just the cards HTML (reuse logic from get_manage_content)
+            subscription_cards = ""
+            
+            if not subscriptions:
+                # Empty state - same as in get_manage_content
+                subscription_cards = '''
+                <div class="empty-state">
+                    <h3>Add your first subscription</h3>
+                    <p>Click the + button below to get started</p>
+                </div>'''
+            else:
+                # Generate cards - EXACT same logic as get_manage_content (lines 1452-1487)
+                for sub in subscriptions:
+                    # Use CostUtils for consistent cost display formatting
+                    cost_display = CostUtils.format_cost_for_display(sub.get('cost'))
+                    
+                    # Get billing cycle - show ? if empty
+                    cycle = sub.get('billing_cycle', '')
+                    if not cycle or cycle.strip() == '':
+                        cycle_display = "?"
+                    else:
+                        cycle_display = cycle
+                    
+                    # If both cost and cycle are unknown, just show ?
+                    if cost_display == "?" and cycle_display == "?":
+                        details_display = "?"
+                    else:
+                        details_display = f'<span class="card-cost">{cost_display}</span><span class="card-cycle">{cycle_display}</span>'
+                    
+                    # Check if subscription has a logo
+                    sub_id = sub.get('id', '')
+                    # Escape user-provided data to prevent XSS
+                    safe_name = html.escape(sub.get('name', ''))
+                    
+                    logo_html = ''
+                    if sub.get('logo_data'):
+                        logo_html = f'<img class="card-logo" src="/logo/{sub_id}" alt="{safe_name} logo">'
+                    
+                    subscription_cards += f'''
+                    <div class="subscription-card" data-subscription-id="{sub_id}">
+                        <div class="card-left">
+                            {logo_html}
+                            <div class="card-name">{safe_name}</div>
+                        </div>
+                        <div class="card-details">
+                            {details_display}
+                        </div>
+                    </div>'''
+            
+            # Return just the HTML fragment (not a full template)
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(subscription_cards.encode())
+            
+        except Exception as e:
+            self.send_error(500, f"Failed to load subscription cards: {str(e)}")
     
     def get_emails_content(self):
         """Generate content for emails view"""

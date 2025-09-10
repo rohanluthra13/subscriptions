@@ -136,4 +136,5 @@ Goal: Transform from standalone app to MCP server that AI agents can query for s
 
 Practices
 - when you update the database always update the docs/schema.md file as well to ensure they are both aligned
-- you should run this in a venv using python main.py
+- RUN IN A VIRTUAL ENVIRONMENT ONLY
+    - source venv/bin/activate && python main.py

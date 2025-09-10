@@ -139,7 +139,7 @@ def get_subscriptions(status: Optional[str] = None) -> str:
                 "status": status,
                 "auto_renewing": bool(auto_renewing),
                 "cost": cost,
-                "currency": currency or "USD",
+                "currency": currency or "NZD",
                 "billing_cycle": billing_cycle,
                 "monthly_equivalent": round(monthly_cost, 2) if monthly_cost else None,
                 "next_billing_date": next_date,
@@ -168,7 +168,7 @@ def add_subscription(
     cost: Optional[float] = None,
     billing_cycle: Optional[str] = "monthly",
     status: Optional[str] = "active",
-    currency: Optional[str] = "USD",
+    currency: Optional[str] = "NZD",
     category: Optional[str] = None,
     notes: Optional[str] = None
 ) -> str:

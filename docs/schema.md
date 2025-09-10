@@ -98,7 +98,7 @@ Note: Tables are independent - no formal foreign key relationships implemented
 | domains           | TEXT         | -                                 | JSON array of domains ["netflix.com", "dvd.netflix.com"] |
 | category          | TEXT         | -                                 | Category (streaming, productivity, etc)          |
 | cost              | DECIMAL(10,2)| -                                 | Cost per billing cycle                          |
-| currency          | TEXT         | DEFAULT 'USD'                     | Currency code (e.g., USD, EUR, GBP)             |
+| currency          | TEXT         | DEFAULT 'NZD'                     | Currency code (e.g., USD, EUR, GBP)             |
 | billing_cycle     | TEXT         | -                                 | monthly/yearly/quarterly/one-time               |
 | status            | TEXT         | DEFAULT 'active'                  | active/cancelled/trial/paused                   |
 | auto_renewing     | BOOLEAN      | DEFAULT 1                         | Whether subscription auto-renews                |

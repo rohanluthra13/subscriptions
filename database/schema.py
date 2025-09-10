@@ -93,7 +93,7 @@ def _create_subscriptions_table(cursor: sqlite3.Cursor) -> None:
             domains TEXT,  -- JSON array
             category TEXT,
             cost DECIMAL(10,2),
-            currency TEXT DEFAULT 'USD',
+            currency TEXT DEFAULT 'NZD',
             billing_cycle TEXT,
             status TEXT DEFAULT 'active',
             auto_renewing BOOLEAN DEFAULT 1,

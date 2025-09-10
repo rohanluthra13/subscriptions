@@ -10,9 +10,19 @@ import sys
 import requests
 from datetime import datetime, timedelta
 from typing import Optional
+from decimal import Decimal
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.prompts import base
 from pydantic import Field
+
+# Import CostUtils for financial precision
+try:
+    from utils.cost import CostUtils
+except ImportError:
+    # Fallback if running from different directory
+    import os
+    sys.path.append(os.path.dirname(__file__))
+    from utils.cost import CostUtils
 
 # Initialize MCP server
 mcp = FastMCP("subscriptions")
@@ -119,15 +129,17 @@ def get_subscriptions(status: Optional[str] = None) -> str:
             # Parse domains JSON
             domain_list = json.loads(domains) if domains else []
             
-            # Calculate monthly cost if available
+            # Calculate monthly cost if available using CostUtils for precision
             monthly_cost = None
             if cost:
+                # Use CostUtils for precise decimal calculations
+                cost_decimal = CostUtils.parse_cost_for_calculation(cost)
                 if billing_cycle == "monthly":
-                    monthly_cost = cost
+                    monthly_cost = float(cost_decimal)
                 elif billing_cycle == "yearly" or billing_cycle == "annual":
-                    monthly_cost = cost / 12
+                    monthly_cost = float(cost_decimal / 12)
                 elif billing_cycle == "quarterly":
-                    monthly_cost = cost / 3
+                    monthly_cost = float(cost_decimal / 3)
                 
                 if monthly_cost and status == "active":
                     total_monthly += monthly_cost
@@ -180,7 +192,7 @@ def add_subscription(
         cost: Cost per billing cycle (optional)
         billing_cycle: One of: monthly, yearly, annual, quarterly (default: monthly)
         status: One of: active, cancelled, trial, paused (default: active)
-        currency: Currency code (default: USD)
+        currency: Currency code (default: NZD)
         category: Category like "streaming", "productivity", etc (optional)
         notes: Additional notes (optional)
     """

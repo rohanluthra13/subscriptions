@@ -25,6 +25,8 @@ from utils.cost import CostUtils
 from utils.favicon import fetch_favicon_for_domain
 from utils.decorators import handle_db_errors
 from database.schema import initialize_database
+from gmail.auth import GmailAuthManager
+from gmail.content import EmailContentProcessor
 
 # Load environment variables
 load_dotenv()
@@ -74,6 +76,17 @@ class SubscriptionManager:
         
         self.port = 8000
         self.redirect_uri = f"http://localhost:{self.port}/auth/callback"
+        
+        # Initialize Gmail auth manager
+        self.gmail_auth = GmailAuthManager(
+            client_id=self.google_client_id,
+            client_secret=self.google_client_secret,
+            redirect_uri=self.redirect_uri,
+            db_path=self.db_path
+        )
+        
+        # Initialize email content processor
+        self.email_processor = EmailContentProcessor(self)
     
     @contextmanager
     def db_connection(self, timeout=10.0):
@@ -115,115 +128,19 @@ class SubscriptionManager:
 
     def get_gmail_auth_url(self):
         """Generate Gmail OAuth URL"""
-        params = {
-            'client_id': self.google_client_id,
-            'redirect_uri': self.redirect_uri,
-            'scope': 'https://www.googleapis.com/auth/gmail.readonly',
-            'response_type': 'code',
-            'access_type': 'offline',
-            'prompt': 'select_account consent'  # Force account selection and consent
-        }
-        return f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
+        return self.gmail_auth.get_auth_url()
 
     def exchange_code_for_tokens(self, code: str):
         """Exchange OAuth code for access tokens"""
-        data = {
-            'client_id': self.google_client_id,
-            'client_secret': self.google_client_secret,
-            'code': code,
-            'grant_type': 'authorization_code',
-            'redirect_uri': self.redirect_uri
-        }
-        
-        response = requests.post('https://oauth2.googleapis.com/token', data=data)
-        token_data = response.json()
-        return token_data
+        return self.gmail_auth.exchange_code_for_tokens(code)
 
     def refresh_access_token(self, refresh_token: str):
         """Refresh expired access token"""
-        if not refresh_token or refresh_token.strip() == '':
-            raise Exception("No valid refresh token available")
-            
-        data = {
-            'client_id': self.google_client_id,
-            'client_secret': self.google_client_secret,
-            'refresh_token': refresh_token,
-            'grant_type': 'refresh_token',
-            'scope': 'https://www.googleapis.com/auth/gmail.readonly'
-        }
-        
-        response = requests.post('https://oauth2.googleapis.com/token', data=data)
-        
-        if not response.ok:
-            error_detail = response.text
-            print(f"Token refresh failed: HTTP {response.status_code} - {error_detail}")
-            raise Exception(f"Token refresh failed: {response.status_code} - {error_detail}")
-        
-        token_data = response.json()
-        
-        if 'error' in token_data:
-            error_msg = token_data.get('error_description', token_data['error'])
-            print(f"Token refresh error: {error_msg}")
-            raise Exception(f"Token refresh error: {error_msg}")
-            
-        return token_data
+        return self.gmail_auth.refresh_access_token(refresh_token)
 
     def get_valid_access_token(self, email: str) -> str:
         """Get valid access token, refreshing if necessary"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT access_token, refresh_token, token_expiry 
-            FROM connections WHERE email = ?
-        ''', (email,))
-        
-        result = cursor.fetchone()
-        if not result:
-            conn.close()
-            raise Exception("Connection not found")
-            
-        access_token, refresh_token, token_expiry = result
-        
-        # Handle timezone conversion more robustly
-        try:
-            if token_expiry.endswith('Z'):
-                expiry_time = datetime.fromisoformat(token_expiry.replace('Z', '+00:00'))
-            elif '+00:00' in token_expiry or 'T' in token_expiry:
-                expiry_time = datetime.fromisoformat(token_expiry)
-            else:
-                # Fallback for simple ISO format
-                expiry_time = datetime.fromisoformat(token_expiry)
-        except ValueError as e:
-            conn.close()
-            raise Exception(f"Invalid token expiry format: {token_expiry} - {str(e)}")
-        
-        # If token expires within 5 minutes, refresh it
-        if expiry_time <= datetime.now() + timedelta(minutes=5):
-            print("Refreshing access token...")
-            try:
-                token_data = self.refresh_access_token(refresh_token)
-                
-                if 'access_token' in token_data:
-                    new_expiry = datetime.now() + timedelta(seconds=token_data['expires_in'])
-                    cursor.execute('''
-                        UPDATE connections 
-                        SET access_token = ?, token_expiry = ?
-                        WHERE email = ?
-                    ''', (token_data['access_token'], new_expiry.isoformat(), email))
-                    conn.commit()
-                    access_token = token_data['access_token']
-                    print("Access token refreshed successfully")
-                else:
-                    conn.close()
-                    raise Exception("Failed to refresh token - no access_token in response")
-            except Exception as e:
-                conn.close()
-                print(f"Token refresh failed for {email}: {str(e)}")
-                raise Exception(f"Token refresh failed: {str(e)}. Please re-authenticate.")
-        
-        conn.close()
-        return access_token
+        return self.gmail_auth.get_valid_access_token(email)
 
     def fetch_year_of_emails(self, email: str, years_back: int = 1, job_id=None):
         """Simple approach: Get message IDs from last year, then fetch in small batches with retry"""
@@ -417,63 +334,7 @@ class SubscriptionManager:
 
     def process_batch_simple(self, batch: list, email: str, cursor) -> bool:
         """Process a batch of messages - returns True if successful, False if any errors"""
-        try:
-            access_token = self.get_valid_access_token(email)
-            headers = {'Authorization': f'Bearer {access_token}'}
-            
-            # Process each message in the batch individually (simpler than batch API)
-            for message in batch:
-                msg_id = message['id']
-                
-                # Get message metadata
-                url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?format=metadata'
-                response = requests.get(url, headers=headers)
-                
-                if response.status_code != 200:
-                    # Any error means batch failed - will retry whole batch
-                    return False
-                
-                msg_data = response.json()
-                
-                # Extract headers
-                headers_list = msg_data.get('payload', {}).get('headers', [])
-                msg_headers = {h['name']: h['value'] for h in headers_list if 'name' in h and 'value' in h}
-                
-                # Extract domain and store in database (skip if duplicate)
-                sender = msg_headers.get('From', '')[:300]
-                sender_domain = self.extract_domain(sender)
-                
-                # Parse Gmail date preserving timezone
-                email_date_str = msg_headers.get('Date', '')
-                try:
-                    email_date = parsedate_to_datetime(email_date_str)
-                    received_at = email_date.isoformat()
-                except (ValueError, TypeError):
-                    received_at = datetime.now().isoformat()
-                
-                try:
-                    cursor.execute('''
-                        INSERT INTO processed_emails 
-                        (email, gmail_message_id, subject, sender, sender_domain, received_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (
-                        email,
-                        msg_id,
-                        msg_headers.get('Subject', '')[:500],
-                        sender,
-                        sender_domain,
-                        received_at
-                    ))
-                except sqlite3.IntegrityError as e:
-                    # Debug: Track what emails are being caught as duplicates
-                    print(f"    IntegrityError for {msg_id}: {str(e)}")
-                    pass
-            
-            return True
-            
-        except Exception as e:
-            print(f"    Batch error: {e}")
-            return False
+        return self.email_processor.process_batch_simple(batch, email, cursor)
 
 
     @handle_db_errors(default_return=[])
@@ -1901,48 +1762,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 
     def extract_email_content(self, payload):
         """Extract readable text content from Gmail API payload"""
-        content_parts = []
-        
-        def extract_parts(part):
-            """Recursively extract content from message parts"""
-            mime_type = part.get('mimeType', '')
-            
-            # Handle text parts
-            if mime_type in ['text/plain', 'text/html']:
-                body = part.get('body', {}).get('data')
-                if body:
-                    import base64
-                    try:
-                        # Decode base64url encoded content
-                        decoded = base64.urlsafe_b64decode(body + '==')  # Add padding if needed
-                        text = decoded.decode('utf-8', errors='replace')
-                        
-                        # For HTML, we could strip tags, but keep it simple for now
-                        if mime_type == 'text/html':
-                            # Basic HTML tag removal (simple approach)
-                            import re
-                            text = re.sub(r'<[^>]+>', '', text)
-                            text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-                        
-                        content_parts.append(text.strip())
-                    except Exception as e:
-                        print(f"Failed to decode email part: {e}")
-            
-            # Handle multipart - recursively process parts
-            elif 'parts' in part:
-                for subpart in part['parts']:
-                    extract_parts(subpart)
-        
-        extract_parts(payload)
-        
-        # Join all text parts
-        full_content = '\n\n'.join(content_parts)
-        
-        # Limit content size (e.g., to 50KB) to avoid huge database entries
-        if len(full_content) > 50000:
-            full_content = full_content[:50000] + "\n\n[Content truncated at 50KB]"
-        
-        return full_content if full_content.strip() else "[No readable content found]"
+        return self.email_processor.extract_email_content(payload)
 
     def handle_metadata_fetch(self):
         """Handle metadata fetch request (web interface)"""

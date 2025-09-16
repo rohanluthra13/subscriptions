@@ -237,21 +237,9 @@
                 <span class="nav-label">manage subscriptions</span>
             </div>
             
-            <div class="nav-item" data-view="review">
-                <span class="nav-icon">
-                    <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                </span>
-                <span class="nav-label">for review</span>
-            </div>
             
             <div class="nav-divider"></div>
             
-            <div class="nav-item" data-view="notepad">
-                <span class="nav-icon">
-                    <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/></svg>
-                </span>
-                <span class="nav-label">notepad</span>
-            </div>
             
             <div class="nav-item" data-view="emails">
                 <span class="nav-icon">
@@ -271,28 +259,28 @@
     
     <script>
         let currentView = null;
-        
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             // Get view from URL params
             const urlParams = new URLSearchParams(window.location.search);
             const view = urlParams.get('view') || 'home';
-            
+
             // Load initial view
             loadView(view);
-            
+
             // Setup navigation
             document.querySelectorAll('.nav-item[data-view]').forEach(item => {
                 item.addEventListener('click', function() {
                     const view = this.dataset.view;
                     loadView(view);
-                    
+
                     // Update URL without reload
                     const url = view === 'home' ? '/' : `/?view=${view}`;
                     history.pushState({view}, '', url);
                 });
             });
-            
+
             // Handle back/forward buttons
             window.addEventListener('popstate', function(e) {
                 if (e.state && e.state.view) {
@@ -302,14 +290,14 @@
                 }
             });
         });
-        
+
         async function loadView(viewName, retryCount = 0) {
             if (currentView === viewName) return;
-            
+
             // Show loading
             const mainContent = document.getElementById('main-content');
             mainContent.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-            
+
             // Update active nav
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('active');
@@ -318,27 +306,27 @@
             if (activeNav) {
                 activeNav.classList.add('active');
             }
-            
+
             try {
                 // Create timeout controller
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-                
+
                 // Fetch view content with timeout
                 const response = await fetch(`/api/view/${viewName}`, {
                     signal: controller.signal
                 });
-                
+
                 clearTimeout(timeoutId);
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
-                
+
                 const html = await response.text();
                 mainContent.innerHTML = html;
                 currentView = viewName;
-                
+
                 // Execute any script tags in the loaded content
                 const scripts = mainContent.querySelectorAll('script');
                 scripts.forEach(script => {
@@ -347,13 +335,13 @@
                     document.body.appendChild(newScript);
                     document.body.removeChild(newScript);
                 });
-                
+
                 // Re-initialize any JavaScript for the new view
                 initializeCurrentView(viewName);
-                
+
             } catch (error) {
                 console.error('Failed to load view:', error);
-                
+
                 // Different error handling for initial load vs retries
                 if (error.name === 'AbortError' && retryCount === 0) {
                     // First timeout - offer retry with options
@@ -371,7 +359,7 @@
                     // Other errors or second retry
                     const isTimeout = error.name === 'AbortError';
                     const errorMessage = isTimeout ? 'Request timed out after 15 seconds' : error.message;
-                    
+
                     mainContent.innerHTML = `
                         <div style="text-align: center; padding: 40px;">
                             <h2>Error Loading View</h2>
@@ -385,7 +373,7 @@
                 }
             }
         }
-        
+
         function initializeCurrentView(viewName) {
             // Re-attach event listeners based on view
             switch(viewName) {
@@ -394,19 +382,9 @@
                         initializeSubscriptionManager();
                     }
                     break;
-                case 'review':
-                    if (typeof initializeReviewView === 'function') {
-                        initializeReviewView();
-                    }
-                    break;
-                case 'notepad':
-                    if (typeof initializeNotepadView === 'function') {
-                        initializeNotepadView();
-                    }
-                    break;
             }
         }
-        
+
         // Utility functions for views to use
         window.loadView = loadView;
     </script>

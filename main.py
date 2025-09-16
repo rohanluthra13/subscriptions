@@ -11,6 +11,7 @@ import requests
 import re
 import threading
 import uuid
+import html
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, parse_qs, urlparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -725,6 +726,107 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         
         return template
 
+    def _generate_subscription_card_html(self, subscription):
+        """Generate HTML for a single subscription card.
+        Private method to avoid code duplication between get_manage_content
+        and get_subscription_cards_fragment.
+        """
+        # Use CostUtils for consistent cost display formatting
+        cost_display = CostUtils.format_cost_for_display(subscription.get('cost'))
+
+        # Get billing cycle - show ? if empty
+        cycle = subscription.get('billing_cycle', '')
+        if not cycle or cycle.strip() == '':
+            cycle_display = "?"
+        else:
+            cycle_display = cycle
+
+        # If both cost and cycle are unknown, just show ?
+        if cost_display == "?" and cycle_display == "?":
+            details_display = "?"
+        else:
+            details_display = f'<span class="card-cost">{cost_display}</span><span class="card-cycle">{cycle_display}</span>'
+
+        # Check if subscription has a logo
+        sub_id = subscription.get('id', '')
+        # Escape user-provided data to prevent XSS
+        safe_name = html.escape(subscription.get('name', ''))
+
+        logo_html = ''
+        if subscription.get('logo_data'):
+            logo_html = f'<img class="card-logo" src="/logo/{sub_id}" alt="{safe_name} logo">'
+
+        return f'''
+        <div class="subscription-card" data-subscription-id="{sub_id}">
+            <div class="card-left">
+                {logo_html}
+                <div class="card-name">{safe_name}</div>
+            </div>
+            <div class="card-details">
+                {details_display}
+            </div>
+        </div>'''
+
+    def _parse_notepad_file(self):
+        """Parse notepad.md file and return structured data.
+        Returns dict with 'subscriptions' and 'other_notes' lists.
+        """
+        subscriptions = []
+        other_notes = []
+        current_section = None
+
+        try:
+            with open('resources/notepad.md', 'r') as f:
+                content = f.read()
+                lines = content.split('\n')
+
+                for line in lines:
+                    line = line.strip()
+                    if line == "## Subscriptions":
+                        current_section = "subscriptions"
+                    elif line == "## Other Notes":
+                        current_section = "other_notes"
+                    elif line.startswith('- ') and current_section:
+                        item_text = line[2:].strip()
+                        if current_section == "subscriptions":
+                            subscriptions.append(item_text)
+                        elif current_section == "other_notes":
+                            other_notes.append(item_text)
+        except FileNotFoundError:
+            pass
+
+        return {
+            'subscriptions': subscriptions,
+            'other_notes': other_notes
+        }
+
+    def _generate_notepad_items_html(self, items, field_name, input_type='text'):
+        """Generate HTML for notepad items.
+
+        Args:
+            items: List of text items
+            field_name: Form field name ('subscriptions' or 'other_notes')
+            input_type: 'text' for input fields, 'textarea' for textareas
+        """
+        html_output = ""
+        for item_text in items:
+            escaped_text = html.escape(item_text)
+            if input_type == 'text':
+                html_output += f'''
+                <div class="note-item">
+                    <span class="bullet">•</span>
+                    <input type="text" name="{field_name}" value="{escaped_text}" placeholder="enter note...">
+                </div>
+                '''
+            else:  # textarea
+                html_output += f'''
+                <div class="note-item">
+                    <span class="bullet">•</span>
+                    <textarea name="{field_name}" placeholder="enter note..." rows="1">{escaped_text}</textarea>
+                </div>
+                '''
+        return html_output
+
     def do_GET(self):
         """Handle GET requests"""
         url = urlparse(self.path)
@@ -766,6 +868,8 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_metadata_fetch()
         elif path == '/save_notepad':
             self.handle_notepad_save()
+        elif path == '/notepad/add_item':
+            self.handle_notepad_add_item()
         elif path == '/save_review':
             self.handle_review_save()
         elif path == '/api/fetch':
@@ -946,41 +1050,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             </div>'''
         else:
             for sub in subscriptions:
-                # Use CostUtils for consistent cost display formatting
-                cost_display = CostUtils.format_cost_for_display(sub.get('cost'))
-                
-                # Get billing cycle - show ? if empty
-                cycle = sub.get('billing_cycle', '')
-                if not cycle or cycle.strip() == '':
-                    cycle_display = "?"
-                else:
-                    cycle_display = cycle
-                
-                # If both cost and cycle are unknown, just show ?
-                if cost_display == "?" and cycle_display == "?":
-                    details_display = "?"
-                else:
-                    details_display = f'<span class="card-cost">{cost_display}</span><span class="card-cycle">{cycle_display}</span>'
-                
-                # Check if subscription has a logo
-                sub_id = sub.get('id', '')
-                # Escape user-provided data to prevent XSS
-                safe_name = html.escape(sub.get('name', ''))
-                
-                logo_html = ''
-                if sub.get('logo_data'):
-                    logo_html = f'<img class="card-logo" src="/logo/{sub_id}" alt="{safe_name} logo">'
-                
-                subscription_cards += f'''
-                <div class="subscription-card" data-subscription-id="{sub_id}">
-                    <div class="card-left">
-                        {logo_html}
-                        <div class="card-name">{safe_name}</div>
-                    </div>
-                    <div class="card-details">
-                        {details_display}
-                    </div>
-                </div>'''
+                subscription_cards += self._generate_subscription_card_html(sub)
         
         return self.render_template('views/manage.html',
             subscription_cards=subscription_cards,
@@ -991,14 +1061,12 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     def serve_subscription_cards_fragment(self):
         """Return just the subscription cards HTML fragment for AJAX updates"""
         try:
-            import html
-            
             # Get fresh subscription data from database
             subscriptions = self.sm.get_subscriptions()
-            
+
             # Generate just the cards HTML (reuse logic from get_manage_content)
             subscription_cards = ""
-            
+
             if not subscriptions:
                 # Empty state - same as in get_manage_content
                 subscription_cards = '''
@@ -1007,43 +1075,9 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                     <p>Click the + button below to get started</p>
                 </div>'''
             else:
-                # Generate cards - EXACT same logic as get_manage_content (lines 1452-1487)
+                # Use the shared method to generate cards
                 for sub in subscriptions:
-                    # Use CostUtils for consistent cost display formatting
-                    cost_display = CostUtils.format_cost_for_display(sub.get('cost'))
-                    
-                    # Get billing cycle - show ? if empty
-                    cycle = sub.get('billing_cycle', '')
-                    if not cycle or cycle.strip() == '':
-                        cycle_display = "?"
-                    else:
-                        cycle_display = cycle
-                    
-                    # If both cost and cycle are unknown, just show ?
-                    if cost_display == "?" and cycle_display == "?":
-                        details_display = "?"
-                    else:
-                        details_display = f'<span class="card-cost">{cost_display}</span><span class="card-cycle">{cycle_display}</span>'
-                    
-                    # Check if subscription has a logo
-                    sub_id = sub.get('id', '')
-                    # Escape user-provided data to prevent XSS
-                    safe_name = html.escape(sub.get('name', ''))
-                    
-                    logo_html = ''
-                    if sub.get('logo_data'):
-                        logo_html = f'<img class="card-logo" src="/logo/{sub_id}" alt="{safe_name} logo">'
-                    
-                    subscription_cards += f'''
-                    <div class="subscription-card" data-subscription-id="{sub_id}">
-                        <div class="card-left">
-                            {logo_html}
-                            <div class="card-name">{safe_name}</div>
-                        </div>
-                        <div class="card-details">
-                            {details_display}
-                        </div>
-                    </div>'''
+                    subscription_cards += self._generate_subscription_card_html(sub)
             
             # Return just the HTML fragment (not a full template)
             self.send_response(200)
@@ -1203,41 +1237,16 @@ class SimpleWebServer(BaseHTTPRequestHandler):
     
     def get_notepad_content(self):
         """Generate content for notepad view using template"""
-        # Read existing notes from resources/notepad.md if it exists
-        subscription_items = ""
-        other_notes_items = ""
-        
-        try:
-            with open('resources/notepad.md', 'r') as f:
-                content = f.read()
-                
-            # Parse the markdown to extract items
-            current_section = None
-            for line in content.split('\n'):
-                line = line.strip()
-                if line == "## Subscriptions":
-                    current_section = "subscriptions"
-                elif line == "## Other Notes":
-                    current_section = "other_notes"
-                elif line.startswith('- ') and current_section:
-                    item_text = line[2:].strip()
-                    if current_section == "subscriptions":
-                        subscription_items += f'''
-                        <div class="note-item">
-                            <span class="bullet">•</span>
-                            <input name="subscriptions" value="{item_text}" />
-                        </div>
-                        '''
-                    elif current_section == "other_notes":
-                        other_notes_items += f'''
-                        <div class="note-item">
-                            <span class="bullet">•</span>
-                            <textarea name="other_notes" rows="1">{item_text}</textarea>
-                        </div>
-                        '''
-        except FileNotFoundError:
-            # File doesn't exist yet, start with empty sections
-            pass
+        # Use shared method to parse notepad file
+        notepad_data = self._parse_notepad_file()
+
+        # Use shared method to generate HTML for each section
+        subscription_items = self._generate_notepad_items_html(
+            notepad_data['subscriptions'], 'subscriptions', 'text'
+        )
+        other_notes_items = self._generate_notepad_items_html(
+            notepad_data['other_notes'], 'other_notes', 'textarea'
+        )
         
         return self.render_template('views/notepad.html',
             subscription_items=subscription_items,
@@ -1346,6 +1355,58 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             print(f"Error saving notepad: {e}")
             # Return error response
             self.send_json_response({"success": False, "error": str(e)}, status=500)
+
+    def handle_notepad_add_item(self):
+        """Handle adding a new item to notepad and return updated HTML fragment"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            form_data = parse_qs(post_data)
+
+            section = form_data.get('section', [''])[0]
+
+            # Use shared method to parse existing notes
+            notepad_data = self._parse_notepad_file()
+
+            # Add an empty item to the appropriate section and generate HTML
+            if section == 'subscriptions':
+                # Add empty item to existing subscriptions
+                items_with_new = notepad_data['subscriptions'] + ['']
+                subscription_items = self._generate_notepad_items_html(
+                    items_with_new, 'subscriptions', 'text'
+                )
+                # Add autofocus to the last (new) input
+                subscription_items = subscription_items.replace(
+                    'value="" placeholder="enter note..."',
+                    'value="" placeholder="enter note..." autofocus'
+                )
+                # Return just the updated subscriptions list HTML
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html')
+                self.end_headers()
+                self.wfile.write(subscription_items.encode())
+            elif section == 'other-notes':
+                # Add empty item to existing other notes
+                items_with_new = notepad_data['other_notes'] + ['']
+                other_notes_items = self._generate_notepad_items_html(
+                    items_with_new, 'other_notes', 'textarea'
+                )
+                # Add autofocus to the last (new) textarea
+                other_notes_items = other_notes_items.replace(
+                    'placeholder="enter note..." rows="1"></textarea>',
+                    'placeholder="enter note..." rows="1" autofocus></textarea>'
+                )
+                # Return just the updated other notes list HTML
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html')
+                self.end_headers()
+                self.wfile.write(other_notes_items.encode())
+            else:
+                self.send_error(400, "Invalid section")
+
+        except Exception as e:
+            print(f"Error adding notepad item: {e}")
+            self.send_error(500, str(e))
 
     def handle_review_save(self):
         """Handle saving review form data back to llm_notes.md"""

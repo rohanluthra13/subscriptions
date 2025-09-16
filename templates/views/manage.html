@@ -752,21 +752,14 @@
     
     // Use embedded subscription data instead of AJAX call with error handling
     let subscriptionsData;
-    let categoriesData;
     try {
         subscriptionsData = {{embedded_subscriptions}};
         if (!Array.isArray(subscriptionsData)) {
             throw new Error('Invalid subscription data format');
         }
-        
-        categoriesData = {{embedded_categories}};
-        if (!Array.isArray(categoriesData)) {
-            throw new Error('Invalid categories data format');
-        }
     } catch (error) {
         console.error('Failed to parse data:', error);
         subscriptionsData = [];
-        categoriesData = [];
         // Show error to user if data fails to load
         setTimeout(() => {
             const container = document.getElementById('subscription-cards');
@@ -897,39 +890,13 @@
         updateFloatingLabelStates();
     }
     
-    function buildCategoryOptions() {
-        // Simple alphabetical list from database
-        let options = '';
-        
-        if (categoriesData && categoriesData.length > 0) {
-            // Simple alphabetical sort
-            const sortedCategories = categoriesData
-                .map(cat => cat.name)
-                .sort();
-            
-            sortedCategories.forEach((categoryName) => {
-                options += `<div class="dropdown-option" data-value="${categoryName}">${categoryName}</div>`;
-            });
-        }
-        // No fallback - if database empty, dropdown empty (user can type custom)
-        
-        return { options };
-    }
 
     function initializeCustomDropdowns() {
         // Only initialize once globally using event delegation
         if (dropdownsInitialized) return;
         dropdownsInitialized = true;
         
-        // Update category dropdown with database data
-        const { options } = buildCategoryOptions();
-        const categoryDropdown = document.querySelector('[data-field="category"]');
-        if (categoryDropdown) {
-            const menu = categoryDropdown.querySelector('.dropdown-menu');
-            if (menu) {
-                menu.innerHTML = options;
-            }
-        }
+        // Category dropdown options are now server-rendered
         
         // Use event delegation on the modal for all dropdown events
         modal.addEventListener('click', (e) => {
@@ -1242,30 +1209,8 @@
     }
     
     function showToast(message, type = 'success') {
-        // Remove existing toast if any
-        const existingToast = document.querySelector('.toast');
-        if (existingToast) {
-            existingToast.remove();
-        }
-        
-        // Create new toast
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        
-        // Show toast
-        setTimeout(() => {
-            toast.style.display = 'block';
-        }, 10);
-        
-        // Hide toast after 3 seconds
-        setTimeout(() => {
-            toast.style.display = 'none';
-            setTimeout(() => {
-                toast.remove();
-            }, 300);
-        }, 3000);
+        // Toast notifications removed - use server-side flash messages instead
+        console.log(`${type.toUpperCase()}: ${message}`);
     }
     
     // Global variable to store subscription ID for deletion

@@ -14,7 +14,7 @@
                 <div id="subscriptions-list" style="margin-bottom: 10px;">
                     {{subscription_items}}
                 </div>
-                <button type="button" class="add-note" onclick="addNote('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
+                <button type="button" class="add-note" onclick="addNoteItem('subscriptions')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
             </div>
             
             <div style="flex: 0.6;"></div> <!-- Spacer to position Other Notes -->
@@ -24,7 +24,7 @@
                 <div id="other-notes-list" style="margin-bottom: 10px;">
                     {{other_notes_items}}
                 </div>
-                <button type="button" class="add-note" onclick="addNote('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
+                <button type="button" class="add-note" onclick="addNoteItem('other-notes')" style="border: none; background: none; color: #666; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">+</button>
             </div>
             
         </form>
@@ -105,46 +105,40 @@
 
 <script>
     function initializeNotepadView() {
-        // Add initial empty inputs if no existing notes
-        if (document.querySelectorAll('#subscriptions-list .note-item').length === 0) {
-            addNote('subscriptions');
-        }
-        if (document.querySelectorAll('#other-notes-list .note-item').length === 0) {
-            addNote('other-notes');
-        }
+        // Notepad initialization - server renders all content
     }
 
-    function addNote(section) {
-        const listId = section + '-list';
-        const inputName = section === 'subscriptions' ? 'subscriptions' : 'other_notes';
-        const list = document.getElementById(listId);
-        
-        const noteItem = document.createElement('div');
-        noteItem.className = 'note-item';
-        noteItem.innerHTML = `
-            <span class="bullet">•</span>
-            <textarea name="${inputName}" placeholder="enter note..." rows="1"></textarea>
-        `;
-        
-        list.appendChild(noteItem);
-        
-        // Focus the new textarea and add event listeners
-        const newTextarea = noteItem.querySelector('textarea');
-        newTextarea.focus();
-        
-        // Add Enter key handler
-        newTextarea.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                addNote(section);
+    async function addNoteItem(section) {
+        // Call server endpoint to add new note item
+        try {
+            const response = await fetch('/notepad/add_item', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `section=${encodeURIComponent(section)}`
+            });
+
+            if (response.ok) {
+                const html = await response.text();
+                // Replace the appropriate list with updated HTML
+                const listId = section + '-list';
+                const list = document.getElementById(listId);
+                list.innerHTML = html;
+
+                // Focus the new input/textarea
+                const inputs = list.querySelectorAll('input[autofocus], textarea[autofocus]');
+                if (inputs.length > 0) {
+                    const lastInput = inputs[inputs.length - 1];
+                    lastInput.focus();
+                    lastInput.removeAttribute('autofocus');
+                }
+            } else {
+                console.error('Failed to add note item:', response.status);
             }
-        });
-        
-        // Auto-resize textarea as user types
-        newTextarea.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = this.scrollHeight + 'px';
-        });
+        } catch (error) {
+            console.error('Error adding note item:', error);
+        }
     }
     
     function saveNotepad(event) {

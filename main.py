@@ -359,6 +359,18 @@ class SubscriptionManager:
         return results
 
     @handle_db_errors(should_raise=True)
+    def get_subscription_by_id(self, subscription_id):
+        """Get a single subscription by ID"""
+        with self.db_connection(timeout=5.0) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM subscriptions WHERE id = ?', (subscription_id,))
+            columns = [desc[0] for desc in cursor.description]
+            row = cursor.fetchone()
+            if row:
+                return dict(zip(columns, row))
+            return None
+
+    @handle_db_errors(should_raise=True)
     def update_subscription(self, subscription_id, field, value):
         """Update a single field of a subscription"""
         with self.db_connection(timeout=5.0) as conn:
@@ -748,6 +760,10 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 self.serve_subscription_logo(sub_id)
             else:
                 self.send_error(404)
+        elif path.startswith('/api/subscriptions/') and len(path.split('/')) == 4:
+            # Handle GET /api/subscriptions/{id}
+            subscription_id = path.split('/')[-1]
+            self.handle_subscription_get(subscription_id)
         else:
             self.send_error(404)
 
@@ -1148,6 +1164,27 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             
         except ValueError as e:
             self.send_json_response({'success': False, 'error': str(e)}, status=400)
+        except Exception as e:
+            self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
+
+    def handle_subscription_get(self, subscription_id):
+        """Handle individual subscription retrieval requests"""
+        try:
+            if not subscription_id:
+                self.send_json_response({'success': False, 'error': 'Missing subscription ID'}, status=400)
+                return
+
+            # Get the subscription from database
+            subscription = self.sm.get_subscription_by_id(subscription_id)
+
+            if not subscription:
+                self.send_json_response({'success': False, 'error': 'Subscription not found'}, status=404)
+                return
+
+            # Sanitize subscription data for JSON serialization
+            sanitized_subscription = self._sanitize_subscription_for_json(subscription)
+            self.send_json_response({'success': True, 'subscription': sanitized_subscription}, status=200)
+
         except Exception as e:
             self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
 

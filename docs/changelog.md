@@ -10,6 +10,43 @@ All notable changes to this project will be documented in this file.
 - **Technical debt**: Document separately in `docs/technical-debt.md` rather than changelog
 - **Target audience**: Developers who need to understand what changed, not how it was implemented
 
+## [2025-09-17] - HTML-Over-Wire Refactor: Phase 1 Step 3
+
+### Changed
+- Removed client-side data caching from manage view (Phase 1, Item 3)
+- Modal population now fetches data from server instead of JavaScript cache
+- Delete confirmations get subscription name from DOM instead of cache
+
+### Added
+- New `/api/subscriptions/{id}` endpoint for individual subscription retrieval
+- `get_subscription_by_id()` method in SubscriptionManager class
+
+### Notes
+- Eliminates client-server state synchronization complexity
+- Sets foundation for eventual modal-to-page conversion
+- Server now single source of truth for all subscription data
+
+## [2025-09-17] - Architecture Simplification: Feature Removal
+
+### Removed
+- Review feature (LLM analysis and user confirmation workflow)
+- Notepad feature (user notes and brainstorming interface)
+- Related UI navigation items and backend endpoints
+
+### Changed
+- Application now focused solely on Gmail integration and subscription management
+- MCP server prompts updated to use direct subscription management instead of review workflow
+- Documentation updated to reflect current three-view architecture (home, manage, emails)
+
+### Fixed
+- Cleaned up technical debt from removed features
+- Eliminated dead code references and documentation inconsistencies
+
+### Notes
+- Net reduction of 617 lines of code while maintaining core functionality
+- HTML-over-wire refactor scope reduced by 30% with cleaner foundation
+- Preserves all Gmail OAuth, email processing, and subscription CRUD capabilities
+
 ## [2025-09-16] - HTML-Over-Wire Refactor: Phase 1 Step 1
 
 ### Changed

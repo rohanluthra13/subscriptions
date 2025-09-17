@@ -750,24 +750,7 @@
     let subWebsiteField;
     let subNotesField;
     
-    // Use embedded subscription data instead of AJAX call with error handling
-    let subscriptionsData;
-    try {
-        subscriptionsData = {{embedded_subscriptions}};
-        if (!Array.isArray(subscriptionsData)) {
-            throw new Error('Invalid subscription data format');
-        }
-    } catch (error) {
-        console.error('Failed to parse data:', error);
-        subscriptionsData = [];
-        // Show error to user if data fails to load
-        setTimeout(() => {
-            const container = document.getElementById('subscription-cards');
-            if (container && subscriptionsData.length === 0) {
-                showToast('Failed to load data. Please refresh the page.', 'error');
-            }
-        }, 100);
-    }
+    // Data will be fetched from server when needed - no client-side caching
     
     function initializeSubscriptionManager() {
         // Cache all DOM elements once to avoid repeated queries
@@ -1067,7 +1050,7 @@
     }
     
     
-    function openModal(mode, subscriptionId = null) {
+    async function openModal(mode, subscriptionId = null) {
         // Use cached DOM references instead of querying again
         
         // Reset form
@@ -1092,7 +1075,7 @@
             
             // Populate form with existing data
             if (subscriptionId) {
-                populateForm(subscriptionId);
+                await populateForm(subscriptionId);
             }
         }
         
@@ -1109,16 +1092,27 @@
         modal.classList.remove('visible');
     }
     
-    function populateForm(subscriptionId) {
-        if (!subscriptionsData) {
-            console.error('Subscription data not loaded');
-            return;
-        }
-        
-        // Find subscription in cached data
-        const subscription = subscriptionsData.find(sub => sub.id === subscriptionId);
-        if (!subscription) {
-            console.error('Subscription not found:', subscriptionId);
+    async function populateForm(subscriptionId) {
+        try {
+            // Fetch subscription data from server
+            const response = await fetch(`/api/subscriptions/${subscriptionId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to fetch subscription data');
+            }
+
+            const subscription = result.subscription;
+            if (!subscription) {
+                throw new Error('Subscription not found');
+            }
+        } catch (error) {
+            console.error('Failed to fetch subscription data:', error);
+            showToast('Failed to load subscription data. Please try again.', 'error');
+            closeModal();
             return;
         }
         
@@ -1223,9 +1217,8 @@
             return;
         }
         
-        // Find the subscription name for confirmation
-        const subscription = subscriptionsData.find(sub => sub.id === subscriptionId);
-        const subscriptionName = subscription ? subscription.name : 'this subscription';
+        // Get the subscription name from the form field (already populated in modal)
+        const subscriptionName = subNameField.value || 'this subscription';
         
         // Store the ID and show confirmation
         subscriptionToDelete = subscriptionId;

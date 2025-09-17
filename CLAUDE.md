@@ -63,9 +63,7 @@ rm subscriptions.db
 │   └── views/          # View fragments loaded via AJAX
 │       ├── home.html   # Summary dashboard
 │       ├── manage.html # Subscription management
-│       ├── emails.html # Gmail integration
-│       ├── review.html # LLM findings review
-│       └── notepad.html# User notes
+│       └── emails.html # Gmail integration
 ├── docs/               # Architecture documentation
 │   ├── #LLMbriefs/     # Agent review documents
 │   ├── manifesto.md    # Project philosophy
@@ -90,11 +88,10 @@ OPENAI_MODEL=gpt-4o-mini
 ## How It Works
 
 1. **Gmail Connection**: OAuth flow to access email metadata
-2. **Domain Clustering**: Groups emails by sender domain 
-3. **LLM Analysis**: AI analyzes patterns and writes findings to `resources/llm_notes.md`
-4. **User Review**: Interactive UI at `/?view=review` for confirming/rejecting findings
-5. **Subscription Management**: Full CRUD operations with inline editing at `/?view=manage`
-6. **Local Storage**: All data stays in local SQLite database
+2. **Domain Clustering**: Groups emails by sender domain
+3. **Subscription Management**: Full CRUD operations at `/?view=manage`
+4. **Local Storage**: All data stays in local SQLite database
+5. **MCP Integration**: AI agents can query and manage subscriptions via MCP protocol
 
 ## Development Notes
 
@@ -119,20 +116,15 @@ OPENAI_MODEL=gpt-4o-mini
 - `processed_emails` - Email metadata and sender domains
 - `subscriptions` - Detected subscription details
 
-## Review Workflow
+## MCP Integration (Active)
 
-- LLM findings stored in `resources/llm_notes.md`
-- Review UI at `/?view=review` for user confirmation
-- Markdown format with User Check (Yes/No) and User Notes fields
+See `mcp_server.py` for current implementation:
+- Exposes subscription data via Model Context Protocol
+- AI agents can query, add, and update subscriptions
+- Background job system for email processing
+- Local storage with AI interaction capability
 
-## MCP Migration (Future)
-
-See `docs/` folder for planning:
-- `manifesto.md` - Project philosophy and goals
-- `product.md` - MCP integration specs
-- `technical.md` - Implementation approach
-
-Goal: Transform from standalone app to MCP server that AI agents can query for subscription management.
+The app now serves as both a web interface and MCP server for AI agent interaction.
 
 Practices
 - when you update the database always update the docs/schema.md file as well to ensure they are both aligned

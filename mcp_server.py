@@ -34,11 +34,11 @@ mcp = FastMCP("subscriptions")
 )
 def analyze_email_metadata() -> list[base.Message]:
     """Analyze email metadata to identify subscription services
-    
+
     This prompt guides the LLM to:
     1. Retrieve existing subscriptions and email metadata
     2. Analyze patterns to identify subscription services
-    3. Write findings to resources/llm_notes.md
+    3. Suggest new subscriptions to add
     """
     prompt = """You are analyzing email metadata to identify subscription services.
 
@@ -58,19 +58,19 @@ Analysis approach:
 - Focus on domains NOT already in the subscriptions table
 
 Final output:
-After processing all emails, append your findings to resources/llm_notes.md in this format:
+After processing all emails, suggest new subscriptions to add by providing:
 
-**[Service Name]**
-Domains: [domain1.com, domain2.com] 
-Notes: [Evidence across all batches, e.g. "12 monthly billing emails", "renewal notices every 30 days"]
+For each discovered subscription:
+- Service name
+- Domains found
+- Evidence (e.g. "12 monthly billing emails", "renewal notices every 30 days")
+- Estimated cost if found in emails
+- Recommended action (add subscription or investigate further)
 
-User Check: [ ] Yes | [ ] No
-User Notes: 
-
-Add each discovered subscription as a new block at the end of the "## Discovered Subscriptions" section.
+Use add_subscription() to directly add confirmed subscriptions to the database.
 
 The system handles batching automatically - just keep calling get_email_metadata() until done."""
-    
+
     return [base.UserMessage(prompt)]
 
 def get_db_connection():

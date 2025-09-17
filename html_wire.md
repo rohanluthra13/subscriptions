@@ -41,17 +41,19 @@ This document outlines the systematic refactor from the current hybrid JavaScrip
 - **Why**: Eliminates event reattachment complexity
 - **Change**: Remove `refreshSubscriptionCards()` and similar fragment update functions
 
-### 7. Server-Side Review Filtering
-- **Complexity**: Medium - URL parameter handling, server-side filtering logic
-- **Files**: `main.py` (filter logic), `templates/views/review.html` (remove JS filtering)
-- **Why**: Stateless, bookmarkable filtering
-- **Change**: Move todo/done filtering from JavaScript to URL parameters
+### 7. ~~Server-Side Review Filtering~~ ❌ REMOVED
+- ~~**Complexity**: Medium - URL parameter handling, server-side filtering logic~~
+- ~~**Files**: `main.py` (filter logic), `templates/views/review.html` (remove JS filtering)~~
+- ~~**Why**: Stateless, bookmarkable filtering~~
+- ~~**Change**: Move todo/done filtering from JavaScript to URL parameters~~
+- **STATUS**: Feature removed from application (2025-09-17)
 
-### 8. Remove Dynamic DOM Generation
-- **Complexity**: Low - replace with server-rendered forms
-- **Files**: `templates/views/notepad.html` (remove `addNote()`), `main.py` (note endpoints)
-- **Why**: Security and simplicity
-- **Change**: Replace JavaScript HTML creation with server-rendered content
+### 8. ~~Remove Dynamic DOM Generation~~ ❌ REMOVED
+- ~~**Complexity**: Low - replace with server-rendered forms~~
+- ~~**Files**: `templates/views/notepad.html` (remove `addNote()`), `main.py` (note endpoints)~~
+- ~~**Why**: Security and simplicity~~
+- ~~**Change**: Replace JavaScript HTML creation with server-rendered content~~
+- **STATUS**: Feature removed from application (2025-09-17)
 
 ### 9. Simplify Navigation JavaScript
 - **Complexity**: Low - keep only view loading, remove initialization complexity
@@ -67,7 +69,7 @@ This document outlines the systematic refactor from the current hybrid JavaScrip
 3. **Remove Client-Side Data Caching** - Eliminates sync issues early
 
 ### Phase 2: Server-Side Logic (Medium Risk)
-4. **Server-Side Review Filtering** - Self-contained feature, good practice
+4. ~~**Server-Side Review Filtering**~~ ❌ REMOVED - Feature removed from application
 5. **Move Dropdown Rendering to Server** - Affects forms but contained scope
 
 ### Phase 3: Form Handling (Medium Risk)

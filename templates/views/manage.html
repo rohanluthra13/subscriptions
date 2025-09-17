@@ -731,9 +731,7 @@
     let deleteConfirmationModal;
     let form;
     let addBtn;
-    let closeBtn;
     let submitBtn;
-    let deleteBtn;
     let confirmDeleteBtn;
     let cancelDeleteBtn;
     let deleteConfirmationMessage;
@@ -758,9 +756,7 @@
         deleteConfirmationModal = document.getElementById('delete-confirmation-modal');
         form = document.getElementById('subscription-form');
         addBtn = document.getElementById('add-btn');
-        closeBtn = document.getElementById('modal-close');
         submitBtn = document.getElementById('submit-btn');
-        deleteBtn = document.getElementById('delete-btn');
         confirmDeleteBtn = document.getElementById('confirm-delete-btn');
         cancelDeleteBtn = document.getElementById('cancel-delete-btn');
         deleteConfirmationMessage = document.getElementById('delete-confirmation-message');
@@ -799,9 +795,14 @@
             });
         });
         
-        // Close modal handlers
-        closeBtn.addEventListener('click', closeModal);
+        // Close modal handlers - use event delegation for modal-close button
         modal.addEventListener('click', (e) => {
+            // Handle close button clicks (use ID selector for specificity)
+            if (e.target.closest('#modal-close')) {
+                closeModal();
+                return;
+            }
+            // Handle clicks on modal overlay (outside modal content)
             if (e.target === modal) {
                 closeModal();
             }
@@ -814,11 +815,19 @@
             }
         });
         
-        // Form submission
-        form.addEventListener('submit', handleFormSubmit);
+        // Form submission - use event delegation for dynamic forms
+        modal.addEventListener('submit', (e) => {
+            if (e.target.id === 'subscription-form') {
+                handleFormSubmit(e);
+            }
+        });
         
-        // Delete button click (using cached reference)
-        deleteBtn.addEventListener('click', handleDeleteClick);
+        // Delete button click - use event delegation to handle dynamically replaced forms
+        modal.addEventListener('click', (e) => {
+            if (e.target.closest('#delete-btn')) {
+                handleDeleteClick();
+            }
+        });
         
         // Delete confirmation handlers (using cached references)
         
@@ -840,15 +849,10 @@
         });
     }
     
-    let labelsInitialized = false;
     let dropdownsInitialized = false;
-    
+
     function initializeFloatingLabels() {
-        // Only initialize once to avoid duplicate event listeners
-        if (labelsInitialized) {
-            updateFloatingLabelStates();
-            return;
-        }
+        // Always re-initialize for new form content to attach listeners to new DOM elements
         
         const formFields = document.querySelectorAll('.form-field:not(.dropdown-field)');
         
@@ -869,7 +873,6 @@
             // No special handling needed for cost field anymore (no label)
         });
         
-        labelsInitialized = true;
         updateFloatingLabelStates();
     }
     
@@ -1082,11 +1085,19 @@
             submitBtn = document.getElementById('submit-btn');
             deleteBtn = document.getElementById('delete-btn');
 
-            // Re-attach event listeners to the new form
-            form.addEventListener('submit', handleFormSubmit);
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', handleDeleteClick);
-            }
+            // Re-cache form field elements for the new form
+            subscriptionIdField = document.getElementById('subscription-id');
+            subNameField = document.getElementById('sub-name');
+            subCostField = document.getElementById('sub-cost');
+            subCurrencyField = document.getElementById('sub-currency');
+            subCycleField = document.getElementById('sub-cycle');
+            subCategoryField = document.getElementById('sub-category');
+            subStatusField = document.getElementById('sub-status');
+            subRenewingField = document.getElementById('sub-renewing');
+            subWebsiteField = document.getElementById('sub-website');
+            subNotesField = document.getElementById('sub-notes');
+
+            // Event listeners are now handled via delegation on the modal element
 
             modal.classList.add('visible');
 

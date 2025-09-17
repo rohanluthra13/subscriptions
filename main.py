@@ -760,6 +760,13 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 self.serve_subscription_logo(sub_id)
             else:
                 self.send_error(404)
+        elif path == '/api/subscription/new':
+            # Handle GET /api/subscription/new - returns HTML form for new subscription
+            self.handle_subscription_form_new()
+        elif path.startswith('/api/subscription/') and path.endswith('/edit') and len(path.split('/')) == 5:
+            # Handle GET /api/subscription/{id}/edit - returns populated HTML form
+            subscription_id = path.split('/')[3]  # Get ID from /api/subscription/{id}/edit
+            self.handle_subscription_form_edit(subscription_id)
         elif path.startswith('/api/subscriptions/') and len(path.split('/')) == 4:
             # Handle GET /api/subscriptions/{id}
             subscription_id = path.split('/')[-1]
@@ -1075,18 +1082,18 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_subscription_update(self):
-        """Handle subscription update requests"""
+        """Handle subscription update requests - returns HTML fragment"""
         try:
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length).decode('utf-8')
             data = json.loads(post_data)
-            
+
             subscription_id = data.get('id')
-            
+
             if not subscription_id:
-                self.send_json_response({'success': False, 'error': 'Missing subscription id'}, status=400)
+                self.send_error(400, 'Missing subscription id')
                 return
-            
+
             # Check if this is a single field update or bulk update
             if 'field' in data and 'value' in data:
                 # Single field update (original behavior)
@@ -1108,64 +1115,68 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                         # Track if website_url was updated (logo fetch already triggered in update_subscription)
                         if field == 'website_url' and value:
                             website_url_updated = True
-            
-            self.send_json_response({'success': True, 'message': 'Subscription updated successfully'}, status=200)
-            
+
+            if success:
+                # Return updated cards HTML fragment instead of JSON
+                self.serve_subscription_cards_fragment()
+            else:
+                self.send_error(500, 'Failed to update subscription')
+
         except ValueError as e:
-            self.send_json_response({'success': False, 'error': str(e)}, status=400)
+            self.send_error(400, str(e))
         except Exception as e:
-            self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
+            self.send_error(500, f'Server error: {str(e)}')
 
     def handle_subscription_create(self):
-        """Handle subscription creation requests"""
+        """Handle subscription creation requests - returns HTML fragment"""
         try:
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length).decode('utf-8')
             data = json.loads(post_data) if post_data.strip() else {}
-            
+
             # Create the subscription
             new_subscription = self.sm.create_subscription(data)
-            
+
             if new_subscription:
-                response = {
-                    'success': True, 
-                    'message': 'Subscription created successfully',
-                    'subscription': new_subscription
-                }
-                self.send_json_response(response, status=201)
+                # Return updated cards HTML fragment instead of JSON
+                self.serve_subscription_cards_fragment()
             else:
-                self.send_json_response({'success': False, 'error': 'Failed to create subscription'}, status=500)
-                
+                self.send_error(500, 'Failed to create subscription')
+
         except ValueError as e:
-            self.send_json_response({'success': False, 'error': str(e)}, status=400)
+            self.send_error(400, str(e))
         except Exception as e:
-            self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
+            self.send_error(500, f'Server error: {str(e)}')
 
     # REMOVED: handle_subscriptions_list() method - no longer needed after embedding data fix
     # The manage view now embeds subscription data directly in HTML instead of using AJAX
 
     def handle_subscription_delete(self):
-        """Handle subscription deletion requests"""
+        """Handle subscription deletion requests - returns HTML fragment"""
         try:
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length).decode('utf-8')
             data = json.loads(post_data)
-            
+
             subscription_id = data.get('id')
-            
+
             if not subscription_id:
-                self.send_json_response({'success': False, 'error': 'Missing required field: id'}, status=400)
+                self.send_error(400, 'Missing required field: id')
                 return
-            
+
             # Delete the subscription
             success = self.sm.delete_subscription(subscription_id)
-            
-            self.send_json_response({'success': True, 'message': 'Subscription deleted successfully'}, status=200)
-            
+
+            if success:
+                # Return updated cards HTML fragment instead of JSON
+                self.serve_subscription_cards_fragment()
+            else:
+                self.send_error(500, 'Failed to delete subscription')
+
         except ValueError as e:
-            self.send_json_response({'success': False, 'error': str(e)}, status=400)
+            self.send_error(400, str(e))
         except Exception as e:
-            self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
+            self.send_error(500, f'Server error: {str(e)}')
 
     def handle_subscription_get(self, subscription_id):
         """Handle individual subscription retrieval requests"""
@@ -1187,6 +1198,212 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 
         except Exception as e:
             self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
+
+    def handle_subscription_form_new(self):
+        """Handle GET /api/subscription/new - returns HTML form for new subscription"""
+        try:
+            categories = self.sm.get_categories()
+            form_html = self._generate_subscription_form_html(categories=categories)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(form_html.encode('utf-8'))
+
+        except Exception as e:
+            self.send_error(500, f'Server error: {str(e)}')
+
+    def handle_subscription_form_edit(self, subscription_id):
+        """Handle GET /api/subscription/{id}/edit - returns populated HTML form"""
+        try:
+            if not subscription_id:
+                self.send_error(400, 'Missing subscription ID')
+                return
+
+            # Get the subscription from database
+            subscription = self.sm.get_subscription_by_id(subscription_id)
+            if not subscription:
+                self.send_error(404, 'Subscription not found')
+                return
+
+            categories = self.sm.get_categories()
+            form_html = self._generate_subscription_form_html(subscription=subscription, categories=categories)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(form_html.encode('utf-8'))
+
+        except Exception as e:
+            self.send_error(500, f'Server error: {str(e)}')
+
+    def _generate_subscription_form_html(self, subscription=None, categories=None):
+        """Generate HTML form with populated data"""
+        if categories is None:
+            categories = []
+
+        # Determine if this is edit mode
+        is_edit = subscription is not None
+
+        # Set default values or use subscription data
+        if is_edit:
+            form_data = {
+                'id': subscription.get('id', ''),
+                'name': subscription.get('name', ''),
+                'cost': str(subscription.get('cost', '')).replace('$', '') if subscription.get('cost') else '',
+                'currency': subscription.get('currency', 'NZD'),
+                'billing_cycle': subscription.get('billing_cycle', 'monthly'),
+                'category': subscription.get('category', ''),
+                'status': subscription.get('status', 'active'),
+                'auto_renewing': subscription.get('auto_renewing', True),
+                'website_url': subscription.get('website_url', ''),
+                'notes': subscription.get('notes', '')
+            }
+            submit_text = 'Save'
+            delete_button_display = 'flex'
+        else:
+            form_data = {
+                'id': '',
+                'name': '',
+                'cost': '',
+                'currency': 'NZD',
+                'billing_cycle': 'monthly',
+                'category': '',
+                'status': 'active',
+                'auto_renewing': True,
+                'website_url': '',
+                'notes': ''
+            }
+            submit_text = 'Add'
+            delete_button_display = 'none'
+
+        # Generate category options
+        category_options = ''
+        for category in categories:
+            selected = 'selected' if category.get('name') == form_data['category'] else ''
+            category_options += f'<div class="dropdown-option {selected}" data-value="{category.get("name", "")}">{category.get("name", "")}</div>'
+
+        # Generate form HTML (similar to the modal content but server-rendered)
+        form_html = f'''
+        <form id="subscription-form" autocomplete="off">
+            <input type="hidden" id="subscription-id" name="id" value="{form_data['id']}">
+
+            <div class="form-field">
+                <label for="sub-name"{'class="hidden"' if form_data['name'] else ''}>name</label>
+                <input type="text" id="sub-name" name="name" value="{form_data['name']}" required autocomplete="off">
+            </div>
+
+            <div class="form-row">
+                <div class="form-field cost-field">
+                    <div class="cost-input-wrapper">
+                        <input type="text" id="sub-cost" name="cost" value="{form_data['cost']}" autocomplete="off">
+                        <span class="dollar-prefix">$</span>
+                    </div>
+                </div>
+
+                <div class="form-field cycle-field">
+                    <div class="custom-dropdown" data-field="billing_cycle">
+                        <span class="dropdown-value">{form_data['billing_cycle']}</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option {'selected' if form_data['billing_cycle'] == 'weekly' else ''}" data-value="weekly">weekly</div>
+                            <div class="dropdown-option {'selected' if form_data['billing_cycle'] == 'monthly' else ''}" data-value="monthly">monthly</div>
+                            <div class="dropdown-option {'selected' if form_data['billing_cycle'] == 'annually' else ''}" data-value="annually">annually</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="sub-cycle" name="billing_cycle" value="{form_data['billing_cycle']}">
+                </div>
+
+                <div class="form-field currency-field">
+                    <div class="custom-dropdown" data-field="currency">
+                        <span class="dropdown-value">{form_data['currency']}</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option {'selected' if form_data['currency'] == 'NZD' else ''}" data-value="NZD">NZD</div>
+                            <div class="dropdown-option {'selected' if form_data['currency'] == 'USD' else ''}" data-value="USD">USD</div>
+                            <div class="dropdown-option {'selected' if form_data['currency'] == 'INR' else ''}" data-value="INR">INR</div>
+                            <div class="dropdown-option {'selected' if form_data['currency'] == 'GBP' else ''}" data-value="GBP">GBP</div>
+                            <div class="dropdown-option {'selected' if form_data['currency'] == 'EUR' else ''}" data-value="EUR">EUR</div>
+                            <div class="dropdown-option {'selected' if form_data['currency'] == 'AUD' else ''}" data-value="AUD">AUD</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="sub-currency" name="currency" value="{form_data['currency']}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-field category-field">
+                    <div class="custom-dropdown" data-field="category">
+                        <span class="dropdown-value">{'category' if not form_data['category'] else form_data['category']}</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            {category_options}
+                        </div>
+                    </div>
+                    <input type="hidden" id="sub-category" name="category" value="{form_data['category']}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-field status-field">
+                    <div class="custom-dropdown" data-field="status">
+                        <span class="dropdown-value">{form_data['status']}</span>
+                        <span class="dropdown-arrow">▼</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-option {'selected' if form_data['status'] == 'active' else ''}" data-value="active">active</div>
+                            <div class="dropdown-option {'selected' if form_data['status'] == 'trial' else ''}" data-value="trial">trial</div>
+                            <div class="dropdown-option {'selected' if form_data['status'] == 'paused' else ''}" data-value="paused">paused</div>
+                            <div class="dropdown-option {'selected' if form_data['status'] == 'cancelled' else ''}" data-value="cancelled">cancelled</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="sub-status" name="status" value="{form_data['status']}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-field renewing-field">
+                    <div class="renewing-toggle">
+                        <span class="toggle-label">renewing?</span>
+                        <input type="hidden" id="sub-renewing" name="renewing" value="{'true' if form_data['auto_renewing'] else 'false'}">
+                        <span class="toggle-icons">
+                            <svg class="icon-option icon-check {'active' if form_data['auto_renewing'] else ''}" data-value="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <svg class="icon-option icon-x {'' if form_data['auto_renewing'] else 'active'}" data-value="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label for="sub-website"{'class="hidden"' if form_data['website_url'] else ''}>website</label>
+                <input type="url" id="sub-website" name="website_url" value="{form_data['website_url']}" autocomplete="off">
+            </div>
+
+            <div class="form-field">
+                <label for="sub-notes"{'class="hidden"' if form_data['notes'] else ''}>notes</label>
+                <textarea id="sub-notes" name="notes" rows="3" autocomplete="off">{form_data['notes']}</textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" id="submit-btn">{submit_text}</button>
+                <button type="button" id="delete-btn" class="delete-btn" style="display: {delete_button_display};">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"/>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                </button>
+            </div>
+        </form>
+        '''
+
+        return form_html
 
     def handle_oauth_callback(self, params):
         """Handle OAuth callback from Gmail"""

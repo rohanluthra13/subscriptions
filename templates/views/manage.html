@@ -1051,40 +1051,58 @@
     
     
     async function openModal(mode, subscriptionId = null) {
-        // Use cached DOM references instead of querying again
-        
-        // Reset form
-        form.reset();
-        subscriptionIdField.value = '';
-        
-        if (mode === 'add') {
-            submitBtn.textContent = 'Add';
-            deleteBtn.style.display = 'none'; // Hide delete button for new subscriptions
-            
-            // Set default values for new subscriptions only
-            subCycleField.value = 'monthly';
-            subCurrencyField.value = 'NZD';
-            subCategoryField.value = '';
-            subStatusField.value = 'active';
-            subRenewingField.value = 'true'; // Default to true
-            updateRenewingIcons(true); // Update visual state
-            
-        } else if (mode === 'edit') {
-            submitBtn.textContent = 'Save';
-            deleteBtn.style.display = 'flex'; // Show delete button for existing subscriptions
-            
-            // Populate form with existing data
-            if (subscriptionId) {
-                await populateForm(subscriptionId);
+        try {
+            // Fetch form HTML from server
+            let url;
+            if (mode === 'add') {
+                url = '/api/subscription/new';
+            } else if (mode === 'edit' && subscriptionId) {
+                url = `/api/subscription/${subscriptionId}/edit`;
+            } else {
+                console.error('Invalid modal mode or missing subscription ID');
+                return;
             }
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const formHtml = await response.text();
+
+            // Replace the form content with server-rendered HTML
+            const modalContent = document.querySelector('.modal-content');
+            const modalHeader = modalContent.querySelector('.modal-header');
+
+            // Keep the modal header, replace everything else
+            modalContent.innerHTML = modalHeader.outerHTML + formHtml;
+
+            // Re-cache form elements after DOM update
+            form = document.getElementById('subscription-form');
+            submitBtn = document.getElementById('submit-btn');
+            deleteBtn = document.getElementById('delete-btn');
+
+            // Re-attach event listeners to the new form
+            form.addEventListener('submit', handleFormSubmit);
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', handleDeleteClick);
+            }
+
+            modal.classList.add('visible');
+
+            // Initialize floating labels and dropdowns for the new form
+            initializeFloatingLabels();
+
+            // Focus the name field
+            const nameField = document.getElementById('sub-name');
+            if (nameField) {
+                nameField.focus();
+            }
+
+        } catch (error) {
+            console.error('Failed to load form:', error);
+            showToast('Failed to load form. Please try again.', 'error');
         }
-        
-        modal.classList.add('visible');
-        
-        // Initialize floating labels when modal opens
-        initializeFloatingLabels();
-        
-        subNameField.focus();
     }
     
     function closeModal() {
@@ -1092,71 +1110,15 @@
         modal.classList.remove('visible');
     }
     
-    async function populateForm(subscriptionId) {
-        try {
-            // Fetch subscription data from server
-            const response = await fetch(`/api/subscriptions/${subscriptionId}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to fetch subscription data');
-            }
-
-            const subscription = result.subscription;
-            if (!subscription) {
-                throw new Error('Subscription not found');
-            }
-        } catch (error) {
-            console.error('Failed to fetch subscription data:', error);
-            showToast('Failed to load subscription data. Please try again.', 'error');
-            closeModal();
-            return;
-        }
-        
-        // Populate all form fields with complete database data
-        subscriptionIdField.value = subscriptionId;
-        subNameField.value = subscription.name || '';
-        
-        // Clean cost field - remove $ symbol if present
-        let costValue = subscription.cost || '';
-        if (typeof costValue === 'string') {
-            costValue = costValue.replace('$', '');
-        }
-        subCostField.value = costValue;
-        
-        // Update hidden inputs and form fields
-        subCurrencyField.value = subscription.currency || '';
-        subCycleField.value = subscription.billing_cycle || '';
-        subCategoryField.value = subscription.category || '';
-        subStatusField.value = subscription.status || '';
-        const isRenewing = Boolean(subscription.auto_renewing); // Convert 0/1 to false/true
-        subRenewingField.value = isRenewing ? 'true' : 'false';
-        updateRenewingIcons(isRenewing);
-        subWebsiteField.value = subscription.website_url || '';
-        subNotesField.value = subscription.notes || '';
-        
-        // Update dropdown displays
-        updateDropdownDisplay('currency', subscription.currency || 'NZD');
-        updateDropdownDisplay('billing_cycle', subscription.billing_cycle || 'monthly');
-        
-        updateDropdownDisplay('category', subscription.category || '');
-        
-        updateDropdownDisplay('status', subscription.status || 'active');
-        
-        // Update floating label states after populating
-        updateFloatingLabelStates();
-    }
+    // populateForm function removed - forms now come pre-populated from server
     
     async function handleFormSubmit(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(e.target);
         const subscriptionId = formData.get('id');
         const isEdit = subscriptionId && subscriptionId.trim() !== '';
-        
+
         // Prepare data object - include all fields since modal shows complete data
         const data = {
             name: formData.get('name'),
@@ -1169,11 +1131,11 @@
             website_url: formData.get('website_url') || null,
             notes: formData.get('notes') || null
         };
-        
+
         if (isEdit) {
             data.id = subscriptionId;
         }
-        
+
         try {
             const endpoint = isEdit ? '/api/subscriptions/update' : '/api/subscriptions/create';
             const response = await fetch(endpoint, {
@@ -1183,18 +1145,22 @@
                 },
                 body: JSON.stringify(data)
             });
-            
-            const result = await response.json();
-            
-            if (result.success) {
+
+            if (response.ok) {
+                // Server now returns updated HTML fragment instead of JSON
+                const updatedCardsHtml = await response.text();
+
                 closeModal();
                 showToast('Subscription saved successfully', 'success');
-                // Update cards without page reload
-                setTimeout(async () => {
-                    await refreshSubscriptionCards();
-                }, 500);
+
+                // Replace the cards container with updated HTML
+                const container = document.getElementById('subscription-cards');
+                container.innerHTML = updatedCardsHtml;
+
+                // Re-attach event listeners to new cards
+                attachCardEventListeners();
             } else {
-                showToast(result.error || 'Failed to save subscription', 'error');
+                showToast('Failed to save subscription. Please try again.', 'error');
             }
         } catch (error) {
             console.error('Network error:', error);
@@ -1243,7 +1209,7 @@
             showToast('No subscription selected for deletion', 'error');
             return;
         }
-        
+
         try {
             const response = await fetch('/api/subscriptions/delete', {
                 method: 'POST',
@@ -1252,20 +1218,23 @@
                 },
                 body: JSON.stringify({ id: subscriptionToDelete })
             });
-            
-            const result = await response.json();
-            
-            if (result.success) {
+
+            if (response.ok) {
+                // Server now returns updated HTML fragment instead of JSON
+                const updatedCardsHtml = await response.text();
+
                 closeDeleteConfirmation();
                 closeModal();
                 showToast('Subscription deleted successfully', 'success');
-                
-                // Update cards without page reload
-                setTimeout(async () => {
-                    await refreshSubscriptionCards();
-                }, 500);
+
+                // Replace the cards container with updated HTML
+                const container = document.getElementById('subscription-cards');
+                container.innerHTML = updatedCardsHtml;
+
+                // Re-attach event listeners to new cards
+                attachCardEventListeners();
             } else {
-                showToast(result.error || 'Failed to delete subscription', 'error');
+                showToast('Failed to delete subscription. Please try again.', 'error');
             }
         } catch (error) {
             console.error('Network error:', error);

@@ -34,11 +34,35 @@ This document tracks known code quality issues, architectural inconsistencies, a
 **Impact**: Reduced code readability and maintainability
 **Effort**: Medium - establish and apply consistent formatting standards
 
-### Modal State Persistence
-**Issue**: Modals don't refresh data after CRUD operations without page reload
-**Details**: `embedded_subscriptions` JavaScript data becomes stale after updates
-**Impact**: User experience issue - edit forms appear blank until page refresh
-**Effort**: Medium - requires client-side data synchronization or full HTML-over-wire migration
+### Form Generation Code Duplication
+**Issue**: Static form template in manage.html duplicated in server-side form generation
+**Details**: `_generate_subscription_form_html()` (main.py:1240-1406) creates 180+ lines of HTML that duplicates the static modal form template (manage.html:20-139)
+**Impact**: Maintenance burden - form changes require updates in two places, risk of inconsistency
+**Effort**: High - requires template fragment system or server-side template includes
+
+### Long Function Complexity
+**Issue**: Several functions exceed single responsibility principle
+**Details**: `openModal()` (61 lines), `_generate_subscription_form_html()` (166 lines), `fetch_year_of_emails()` (189 lines)
+**Impact**: Reduced readability and maintainability, harder to test individual components
+**Effort**: Medium - break down into smaller, focused functions
+
+### Magic Numbers and Configuration
+**Issue**: Hardcoded values throughout codebase without configuration constants
+**Details**: Timeout values (15000ms), batch sizes (10), retry waits (2**(attempt+1)), rate limits
+**Impact**: Difficult to tune performance, unclear business rules, harder to test with different values
+**Effort**: Low - extract to configuration file or constants
+
+### Manual HTML String Building
+**Issue**: HTML generation uses string concatenation instead of template system
+**Details**: Multiple instances in main.py (lines 710-732, 1240-1406) build HTML with f-strings
+**Impact**: Security risk (manual escaping required), poor maintainability, harder to preview layouts
+**Effort**: High - requires template system with proper escaping and includes
+
+### Client-Side State Management Complexity
+**Issue**: Extensive DOM caching and form field management in JavaScript
+**Details**: 10+ cached form field variables, manual re-caching after DOM updates, complex initialization
+**Impact**: Not fully aligned with HTML-over-wire principles, potential memory leaks, fragile to DOM changes
+**Effort**: Medium - further simplify client-side logic, rely more on server-rendered state
 
 ### HTTP Method Inconsistency
 **Issue**: No consistent REST-like structure across API endpoints
@@ -50,5 +74,13 @@ This document tracks known code quality issues, architectural inconsistencies, a
 
 ## Process Notes
 - Items added during HTML-over-wire refactor Phase 1 review (2025-09-16)
+- Updated after Phase 2 completion and technical debt analysis (2025-09-17)
+- Modal State Persistence issue resolved through HTML-over-wire Phase 2 implementation
+- Unused Variables & Dead Code partially addressed in technical debt cleanup commit
 - Prioritize based on impact vs. effort when planning cleanup sprints
 - Remove items when addressed and document resolution in changelog
+
+## Recently Resolved (2025-09-17)
+- **Event Handling Inconsistency**: Standardized to event delegation pattern throughout
+- **Modal State Persistence**: Resolved through server-rendered forms in HTML-over-wire Phase 2
+- **Dead Code Comments**: Removed obsolete REMOVED: comments and unused variables

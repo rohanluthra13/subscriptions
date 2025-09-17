@@ -730,7 +730,6 @@
     let modal;
     let deleteConfirmationModal;
     let form;
-    let addBtn;
     let submitBtn;
     let confirmDeleteBtn;
     let cancelDeleteBtn;
@@ -755,7 +754,6 @@
         modal = document.getElementById('subscription-modal');
         deleteConfirmationModal = document.getElementById('delete-confirmation-modal');
         form = document.getElementById('subscription-form');
-        addBtn = document.getElementById('add-btn');
         submitBtn = document.getElementById('submit-btn');
         confirmDeleteBtn = document.getElementById('confirm-delete-btn');
         cancelDeleteBtn = document.getElementById('cancel-delete-btn');
@@ -781,18 +779,20 @@
         // Initialize renewing toggle icons
         initializeRenewingToggle();
         
-        // Add subscription button click
-        addBtn.addEventListener('click', () => {
-            openModal('add');
+        // Use event delegation for add button
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#add-btn')) {
+                openModal('add');
+            }
         });
-        
-        // Card click to edit
-        const cards = document.querySelectorAll('.subscription-card');
-        cards.forEach(card => {
-            card.addEventListener('click', () => {
+
+        // Use event delegation for card clicks
+        document.addEventListener('click', (e) => {
+            const card = e.target.closest('.subscription-card');
+            if (card) {
                 const subscriptionId = card.dataset.subscriptionId;
                 openModal('edit', subscriptionId);
-            });
+            }
         });
         
         // Close modal handlers - use event delegation for modal-close button
@@ -1180,7 +1180,7 @@
     }
     
     function showToast(message, type = 'success') {
-        // Toast notifications removed - use server-side flash messages instead
+        // Simplified client-side notification - server should handle user feedback
         console.log(`${type.toUpperCase()}: ${message}`);
     }
     
@@ -1279,15 +1279,7 @@
     }
     
     function attachCardEventListeners() {
-        // Get fresh cards after HTML replacement
-        const cards = document.querySelectorAll('.subscription-card');
-        
-        // Attach clean event listeners (no memory leak)
-        cards.forEach(card => {
-            card.addEventListener('click', () => {
-                const subscriptionId = card.dataset.subscriptionId;
-                openModal('edit', subscriptionId);
-            });
-        });
+        // Event delegation handles card clicks - no need to re-attach listeners
+        // This function kept for API compatibility but does nothing
     }
 </script>

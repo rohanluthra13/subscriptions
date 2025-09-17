@@ -752,7 +752,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_oauth_callback(params)
         elif path == '/reset':
             self.handle_reset()
-        # REMOVED: /api/subscriptions endpoint - data now embedded in HTML
         elif path.startswith('/logo/'):
             # Extract subscription ID from path
             sub_id = path.split('/')[-1] if '/' in path else None
@@ -791,7 +790,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.handle_subscription_create()
         elif path == '/api/subscriptions/delete':
             self.handle_subscription_delete()
-        # REMOVED: /api/subscriptions endpoint - data now embedded in HTML
         else:
             self.send_error(404)
 
@@ -1148,8 +1146,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, f'Server error: {str(e)}')
 
-    # REMOVED: handle_subscriptions_list() method - no longer needed after embedding data fix
-    # The manage view now embeds subscription data directly in HTML instead of using AJAX
 
     def handle_subscription_delete(self):
         """Handle subscription deletion requests - returns HTML fragment"""

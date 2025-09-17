@@ -34,62 +34,42 @@
                 </div>
                 
                 <div class="form-field cycle-field">
-                    <div class="custom-dropdown" data-field="billing_cycle">
-                        <span class="dropdown-value">monthly</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            <div class="dropdown-option" data-value="weekly">weekly</div>
-                            <div class="dropdown-option selected" data-value="monthly">monthly</div>
-                            <div class="dropdown-option" data-value="annually">annually</div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-cycle" name="billing_cycle" value="monthly">
+                    <select id="sub-cycle" name="billing_cycle" class="form-control">
+                        <option value="weekly">weekly</option>
+                        <option value="monthly" selected>monthly</option>
+                        <option value="annually">annually</option>
+                    </select>
                 </div>
                 
                 <div class="form-field currency-field">
-                    <div class="custom-dropdown" data-field="currency">
-                        <span class="dropdown-value">NZD</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            <div class="dropdown-option selected" data-value="NZD">NZD</div>
-                            <div class="dropdown-option" data-value="USD">USD</div>
-                            <div class="dropdown-option" data-value="INR">INR</div>
-                            <div class="dropdown-option" data-value="GBP">GBP</div>
-                            <div class="dropdown-option" data-value="EUR">EUR</div>
-                            <div class="dropdown-option" data-value="AUD">AUD</div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-currency" name="currency" value="NZD">
+                    <select id="sub-currency" name="currency" class="form-control">
+                        <option value="NZD" selected>NZD</option>
+                        <option value="USD">USD</option>
+                        <option value="INR">INR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="EUR">EUR</option>
+                        <option value="AUD">AUD</option>
+                    </select>
                 </div>
             </div>
             
             <div class="form-row">
                 <div class="form-field category-field">
-                    <div class="custom-dropdown" data-field="category">
-                        <span class="dropdown-value">category</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            <!-- Categories will be populated by JavaScript from database -->
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-category" name="category" value="">
+                    <select id="sub-category" name="category" class="form-control">
+                        <!-- Categories will be populated by server from database -->
+                    </select>
                 </div>
                 <!-- Space for additional category field later -->
             </div>
             
             <div class="form-row">
                 <div class="form-field status-field">
-                    <div class="custom-dropdown" data-field="status">
-                        <span class="dropdown-value">active</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            <div class="dropdown-option selected" data-value="active">active</div>
-                            <div class="dropdown-option" data-value="trial">trial</div>
-                            <div class="dropdown-option" data-value="paused">paused</div>
-                            <div class="dropdown-option" data-value="cancelled">cancelled</div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-status" name="status" value="active">
+                    <select id="sub-status" name="status" class="form-control">
+                        <option value="active" selected>active</option>
+                        <option value="trial">trial</option>
+                        <option value="paused">paused</option>
+                        <option value="cancelled">cancelled</option>
+                    </select>
                 </div>
                 <!-- Space for trial checkbox later -->
             </div>
@@ -472,65 +452,44 @@
     }
     
     
-    /* Custom dropdown styling */
-    .custom-dropdown {
-        position: relative;
-        display: flex;
-        align-items: center;
-        cursor: pointer;
+    /* Standard select styling - matches existing custom dropdown appearance */
+    select.form-control {
+        /* Match existing typography */
         font-size: 14px;
-        background: transparent;
+        font-family: inherit;
         color: #999;
-        border-bottom: 1px solid #e0e0e0;
+
+        /* Match existing spacing */
         padding: 8px 12px;
-        /* Fit to content width */
+
+        /* Match existing border style */
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid #e0e0e0;
+
+        /* Match existing interactions */
+        cursor: pointer;
         transition: border-bottom-color 0.2s ease;
+
+        /* Form integration */
+        width: 100%;
+        outline: none;
+
+        /* Custom arrow to match existing design */
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3e%3cpath fill='%23999' d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        background-size: 16px;
+        padding-right: 32px;
     }
-    
-    .custom-dropdown:hover {
+
+    select.form-control:hover {
         border-bottom-color: #ccc;
     }
-    
-    .custom-dropdown .dropdown-value {
-        margin-right: 4px;
-    }
-    
-    .custom-dropdown .dropdown-arrow {
-        font-size: 10px;
-        color: #999;
-    }
-    
-    .custom-dropdown .dropdown-menu {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        background: #f6f6f6;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        border-radius: 4px;
-        padding: 8px 0;
-        min-width: 80px;
-        z-index: 1000;
-        display: none;
-    }
-    
-    .custom-dropdown.open .dropdown-menu {
-        display: block;
-    }
-    
-    .dropdown-option {
-        padding: 8px 16px;
-        cursor: pointer;
-        font-size: 14px;
-        color: #999;
-        transition: background-color 0.1s ease;
-    }
-    
-    .dropdown-option:hover {
-        background-color: rgba(0,0,0,0.05);
-    }
-    
-    .dropdown-option.selected {
-        background-color: rgba(0,0,0,0.1);
+
+    select.form-control:focus {
+        border-bottom-color: #ccc;
     }
     
     /* Special field types that don't need labels */
@@ -773,8 +732,6 @@
         
         // Data is already available - no need to fetch
         
-        // Initialize dropdowns once globally with event delegation
-        initializeCustomDropdowns();
         
         // Initialize renewing toggle icons
         initializeRenewingToggle();
@@ -849,7 +806,6 @@
         });
     }
     
-    let dropdownsInitialized = false;
 
     function initializeFloatingLabels() {
         // Always re-initialize for new form content to attach listeners to new DOM elements
@@ -877,98 +833,6 @@
     }
     
 
-    function initializeCustomDropdowns() {
-        // Only initialize once globally using event delegation
-        if (dropdownsInitialized) return;
-        dropdownsInitialized = true;
-        
-        // Category dropdown options are now server-rendered
-        
-        // Use event delegation on the modal for all dropdown events
-        modal.addEventListener('click', (e) => {
-            // Handle dropdown toggle
-            const dropdown = e.target.closest('.custom-dropdown');
-            if (dropdown && !e.target.closest('.dropdown-menu')) {
-                e.stopPropagation();
-                toggleDropdown(dropdown);
-                return;
-            }
-            
-            // Handle option selection
-            const option = e.target.closest('.dropdown-option');
-            if (option) {
-                e.stopPropagation();
-                const parentDropdown = option.closest('.custom-dropdown');
-                selectOption(parentDropdown, option);
-                return;
-            }
-        });
-        
-        // Close dropdowns when clicking outside - use setTimeout to avoid race condition
-        document.addEventListener('click', (e) => {
-            // Don't close if clicking inside a dropdown
-            if (!e.target.closest('.custom-dropdown')) {
-                setTimeout(() => closeAllDropdowns(), 0);
-            }
-        });
-    }
-    
-    function toggleDropdown(dropdown) {
-        // Close other dropdowns first
-        const otherDropdowns = document.querySelectorAll('.custom-dropdown.open');
-        otherDropdowns.forEach(other => {
-            if (other !== dropdown) {
-                other.classList.remove('open');
-            }
-        });
-        
-        // Toggle this dropdown
-        dropdown.classList.toggle('open');
-    }
-    
-    function selectOption(dropdown, option) {
-        const value = option.dataset.value;
-        const text = option.textContent;
-        const field = dropdown.dataset.field;
-        
-        // Update display value
-        const valueSpan = dropdown.querySelector('.dropdown-value');
-        valueSpan.textContent = text;
-        
-        // Update hidden input for form submission
-        let hiddenInput;
-        switch (field) {
-            case 'billing_cycle':
-                hiddenInput = subCycleField;
-                break;
-            case 'currency':
-                hiddenInput = subCurrencyField;
-                break;
-            case 'category':
-                hiddenInput = subCategoryField;
-                break;
-            case 'status':
-                hiddenInput = subStatusField;
-                break;
-        }
-        
-        if (hiddenInput) {
-            hiddenInput.value = value;
-        }
-        
-        // Update selected state
-        dropdown.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('selected'));
-        option.classList.add('selected');
-        
-        // Close dropdown
-        dropdown.classList.remove('open');
-    }
-    
-    function closeAllDropdowns() {
-        document.querySelectorAll('.custom-dropdown.open').forEach(dropdown => {
-            dropdown.classList.remove('open');
-        });
-    }
     
     // Initialize renewing toggle functionality
     function initializeRenewingToggle() {
@@ -999,32 +863,6 @@
         }
     }
     
-    function updateDropdownDisplay(fieldName, value) {
-        const dropdown = document.querySelector(`[data-field="${fieldName}"]`);
-        if (!dropdown) return;
-        
-        const valueSpan = dropdown.querySelector('.dropdown-value');
-        
-        if (!value) {
-            // Show placeholder text for empty values
-            if (fieldName === 'category') {
-                valueSpan.textContent = 'category';
-            }
-            // Clear any selected states
-            dropdown.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('selected'));
-            return;
-        }
-        
-        const option = dropdown.querySelector(`[data-value="${value}"]`);
-        
-        if (option && valueSpan) {
-            valueSpan.textContent = option.textContent;
-            
-            // Update selected state
-            dropdown.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('selected'));
-            option.classList.add('selected');
-        }
-    }
     
     function updateLabelState(input, label) {
         if (input.value && input.value.trim()) {

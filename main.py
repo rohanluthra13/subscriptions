@@ -1273,11 +1273,11 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             submit_text = 'Add'
             delete_button_display = 'none'
 
-        # Generate category options
+        # Generate category options for select element
         category_options = ''
         for category in categories:
-            selected = 'selected' if category.get('name') == form_data['category'] else ''
-            category_options += f'<div class="dropdown-option {selected}" data-value="{category.get("name", "")}">{category.get("name", "")}</div>'
+            selected = ' selected' if category.get('name') == form_data['category'] else ''
+            category_options += f'<option value="{category.get("name", "")}"{selected}>{category.get("name", "")}</option>'
 
         # Generate form HTML (similar to the modal content but server-rendered)
         form_html = f'''
@@ -1298,61 +1298,41 @@ class SimpleWebServer(BaseHTTPRequestHandler):
                 </div>
 
                 <div class="form-field cycle-field">
-                    <div class="custom-dropdown" data-field="billing_cycle">
-                        <span class="dropdown-value">{form_data['billing_cycle']}</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            <div class="dropdown-option {'selected' if form_data['billing_cycle'] == 'weekly' else ''}" data-value="weekly">weekly</div>
-                            <div class="dropdown-option {'selected' if form_data['billing_cycle'] == 'monthly' else ''}" data-value="monthly">monthly</div>
-                            <div class="dropdown-option {'selected' if form_data['billing_cycle'] == 'annually' else ''}" data-value="annually">annually</div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-cycle" name="billing_cycle" value="{form_data['billing_cycle']}">
+                    <select id="sub-cycle" name="billing_cycle" class="form-control">
+                        <option value="weekly"{'selected' if form_data['billing_cycle'] == 'weekly' else ''}>weekly</option>
+                        <option value="monthly"{'selected' if form_data['billing_cycle'] == 'monthly' else ''}>monthly</option>
+                        <option value="annually"{'selected' if form_data['billing_cycle'] == 'annually' else ''}>annually</option>
+                    </select>
                 </div>
 
                 <div class="form-field currency-field">
-                    <div class="custom-dropdown" data-field="currency">
-                        <span class="dropdown-value">{form_data['currency']}</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            <div class="dropdown-option {'selected' if form_data['currency'] == 'NZD' else ''}" data-value="NZD">NZD</div>
-                            <div class="dropdown-option {'selected' if form_data['currency'] == 'USD' else ''}" data-value="USD">USD</div>
-                            <div class="dropdown-option {'selected' if form_data['currency'] == 'INR' else ''}" data-value="INR">INR</div>
-                            <div class="dropdown-option {'selected' if form_data['currency'] == 'GBP' else ''}" data-value="GBP">GBP</div>
-                            <div class="dropdown-option {'selected' if form_data['currency'] == 'EUR' else ''}" data-value="EUR">EUR</div>
-                            <div class="dropdown-option {'selected' if form_data['currency'] == 'AUD' else ''}" data-value="AUD">AUD</div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-currency" name="currency" value="{form_data['currency']}">
+                    <select id="sub-currency" name="currency" class="form-control">
+                        <option value="NZD"{'selected' if form_data['currency'] == 'NZD' else ''}>NZD</option>
+                        <option value="USD"{'selected' if form_data['currency'] == 'USD' else ''}>USD</option>
+                        <option value="INR"{'selected' if form_data['currency'] == 'INR' else ''}>INR</option>
+                        <option value="GBP"{'selected' if form_data['currency'] == 'GBP' else ''}>GBP</option>
+                        <option value="EUR"{'selected' if form_data['currency'] == 'EUR' else ''}>EUR</option>
+                        <option value="AUD"{'selected' if form_data['currency'] == 'AUD' else ''}>AUD</option>
+                    </select>
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-field category-field">
-                    <div class="custom-dropdown" data-field="category">
-                        <span class="dropdown-value">{'category' if not form_data['category'] else form_data['category']}</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            {category_options}
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-category" name="category" value="{form_data['category']}">
+                    <select id="sub-category" name="category" class="form-control">
+                        {category_options}
+                    </select>
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-field status-field">
-                    <div class="custom-dropdown" data-field="status">
-                        <span class="dropdown-value">{form_data['status']}</span>
-                        <span class="dropdown-arrow">▼</span>
-                        <div class="dropdown-menu">
-                            <div class="dropdown-option {'selected' if form_data['status'] == 'active' else ''}" data-value="active">active</div>
-                            <div class="dropdown-option {'selected' if form_data['status'] == 'trial' else ''}" data-value="trial">trial</div>
-                            <div class="dropdown-option {'selected' if form_data['status'] == 'paused' else ''}" data-value="paused">paused</div>
-                            <div class="dropdown-option {'selected' if form_data['status'] == 'cancelled' else ''}" data-value="cancelled">cancelled</div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="sub-status" name="status" value="{form_data['status']}">
+                    <select id="sub-status" name="status" class="form-control">
+                        <option value="active"{'selected' if form_data['status'] == 'active' else ''}>active</option>
+                        <option value="trial"{'selected' if form_data['status'] == 'trial' else ''}>trial</option>
+                        <option value="paused"{'selected' if form_data['status'] == 'paused' else ''}>paused</option>
+                        <option value="cancelled"{'selected' if form_data['status'] == 'cancelled' else ''}>cancelled</option>
+                    </select>
                 </div>
             </div>
 

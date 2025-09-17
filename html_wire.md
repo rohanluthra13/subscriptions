@@ -1,11 +1,11 @@
 # HTML-Over-Wire Refactor Plan
 
-## Progress Summary
+## Progress Summary - REVISED (2025-09-18)
 - **Phase 1 (Foundation)**: ✅ COMPLETE (navigation JS acceptable as-is)
-- **Phase 2 (Forms + Dropdowns)**: ✅ COMPLETE (server-rendered forms + bug fixes)
-- **Phase 3 (Response Handling)**: 🎯 Next target
-- **Overall Progress**: ~75% Complete (Phase 1-2 done, standardized event handling)
-- **Latest Update**: 2025-09-17 - Phase 2 completed with modal functionality restored
+- **Phase 2 (Forms + Dropdowns)**: ⚠️ PARTIAL (hybrid implementation, not pure HTML-over-wire)
+- **Phase 3 (Response Handling)**: ❌ NOT STARTED (`refreshSubscriptionCards()` still exists)
+- **Overall Progress**: ~40% Complete (foundation solid, significant work remains)
+- **Latest Update**: 2025-09-18 - Agent review revealed plan inaccuracies, updated status
 
 ## Overview
 This document outlines the systematic refactor from the current hybrid JavaScript approach to pure HTML-over-wire architecture for the subscription manager.
@@ -25,26 +25,26 @@ HTML-over-wire doesn't mean eliminating ALL JavaScript. It means:
 - **Change**: Delete `subscriptionsData` and `categoriesData` JavaScript objects
 - **STATUS**: Completed - Removed cache, added `/api/subscriptions/{id}` endpoint
 
-### 2. Convert Modals to Server-Rendered Pages/Fragments ✅ COMPLETED (2025-09-17)
+### 2. Convert Modals to Server-Rendered Pages/Fragments ⚠️ PARTIAL (2025-09-18)
 - **Complexity**: High - new endpoints, form handling, navigation flow
 - **Files**: `main.py` (+5 new endpoints), `templates/views/manage.html` (major rewrite)
 - **Why**: Moves form population logic server-side
 - **Change**: Replace JavaScript modal population with server-rendered forms
-- **STATUS**: Completed - Added `/api/subscription/new` and `/api/subscription/{id}/edit` endpoints
+- **STATUS**: Partial - Server renders forms, but still uses AJAX loading + 557 lines of JS business logic
 
-### 3. Replace JavaScript Form Handlers with Server Submissions ✅ COMPLETED (2025-09-17)
+### 3. Replace JavaScript Form Handlers with Server Submissions ⚠️ PARTIAL (2025-09-18)
 - **Complexity**: Medium - convert AJAX to standard form posts
 - **Files**: `templates/views/manage.html` (form elements), `main.py` (endpoint changes)
 - **Why**: Business logic belongs server-side only
 - **Change**: Convert AJAX form submissions to standard HTTP form posts
-- **STATUS**: Completed - Form submissions now return HTML fragments instead of JSON
+- **STATUS**: Partial - Forms return HTML fragments, but use AJAX not standard form POSTs
 
-### 4. Move Dropdown Rendering to Server ✅ COMPLETED (2025-09-17)
+### 4. Move Dropdown Rendering to Server ⚠️ PARTIAL (2025-09-18)
 - **Complexity**: Medium - server-side HTML generation, styling preservation
 - **Files**: `main.py` (dropdown rendering), `templates/views/manage.html` (markup changes)
 - **Why**: Server controls all content generation
 - **Change**: Render dropdown options server-side instead of JavaScript building
-- **STATUS**: Completed - Categories and all dropdowns server-rendered with proper selections
+- **STATUS**: Partial - Server renders dropdowns, but 90+ lines of custom JS dropdown logic remains
 
 ### 5. Convert Inline Editing to Page Navigation
 - **Complexity**: Low - remove toggle handlers, add edit links
@@ -86,13 +86,13 @@ HTML-over-wire doesn't mean eliminating ALL JavaScript. It means:
 2. **Simplify Navigation JavaScript** - ⚠️ SKIPPED (already follows HTML-over-wire principles)
 3. **Remove Client-Side Data Caching** - ✅ COMPLETED (2025-09-17)
 
-### Phase 2: Form + Dropdown Conversion (Medium Risk) ✅ COMPLETE
-4. **Combined: Form Handlers + Dropdown Rendering** - ✅ COMPLETED (2025-09-17)
+### Phase 2: Form + Dropdown Conversion (Medium Risk) ⚠️ PARTIAL
+4. **Combined: Form Handlers + Dropdown Rendering** - ⚠️ PARTIAL (2025-09-18)
    - ✅ Created endpoints that return complete HTML forms with populated dropdowns
-   - ✅ Converted AJAX form submissions to return HTML fragments
-   - ✅ Eliminated ~400 lines of form/dropdown JavaScript
+   - ⚠️ Forms return HTML fragments but still use AJAX (not standard form POSTs)
+   - ❌ 557 lines of JavaScript business logic remain (not ~400 eliminated)
    - ✅ Fixed modal interaction bugs (delete button, close button, floating labels)
-   - ✅ Standardized event handling with delegation pattern
+   - ✅ Standardized event delegation pattern
 
 ### Phase 3: Response Handling (Low Risk)
 5. **Replace Fragment Updates** - Handle HTML responses from forms
@@ -114,10 +114,34 @@ HTML-over-wire doesn't mean eliminating ALL JavaScript. It means:
 
 **Key Principle**: Start by **removing** complexity before **adding** new patterns. This approach maintains working software while systematically moving toward HTML-over-wire architecture.
 
-## Next Recommended Step
-With Phases 1-2 complete, proceed to **Phase 3: Response Handling (Optional)**. This involves:
-1. Removing `refreshSubscriptionCards()` function (currently simplified but could be eliminated)
-2. Further consolidating fragment update patterns
-3. Optional: Convert remaining modals to full page navigation
+## Next Recommended Steps - REVISED (2025-09-18)
 
-**Current Status**: Application fully functional with HTML-over-wire architecture achieved. Phase 3 is optional optimization - the core refactoring goals have been met with server-rendered forms, eliminated client-side data caching, and standardized event handling.
+Based on agent review findings, significant work remains to achieve true HTML-over-wire architecture:
+
+### Immediate Priority: Complete Phase 2 (Forms + Dropdowns)
+1. **Eliminate Custom Dropdown JavaScript** (manage.html:880-971)
+   - Replace 90+ lines of custom dropdown logic with standard HTML `<select>` elements
+   - Remove `initializeCustomDropdowns()` function entirely
+   - Use server-side form population for selections
+
+2. **Convert AJAX to Standard Form POSTs** (manage.html:1126-1180)
+   - Replace `fetch()` calls with standard HTML form submissions
+   - Use form `action` attributes pointing to server endpoints
+   - Eliminate client-side form data preparation logic
+
+3. **Remove Client-Side Business Logic** (emails.html:77-105)
+   - Convert `fetchEmails()` AJAX pattern to standard form submission
+   - Move button state management to server-side
+
+### Phase 3: Fragment Update Elimination
+4. **Remove `refreshSubscriptionCards()`** (manage.html:1257)
+   - Eliminate fragment update patterns
+   - Forms should redirect to updated page or return complete page HTML
+
+### Target Architecture
+- **Total JavaScript**: Reduce from current ~729 lines to ~131 lines (navigation only)
+- **Zero AJAX**: All interactions via standard HTML forms
+- **Zero client-side business logic**: Server handles all data processing
+- **Standard HTML elements**: No custom JavaScript widgets
+
+**Current Status**: Foundation is solid with server-rendered forms, but substantial client-side complexity remains. The application uses HTML-over-wire hybrid approach rather than pure implementation.

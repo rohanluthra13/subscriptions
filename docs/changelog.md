@@ -10,6 +10,31 @@ All notable changes to this project will be documented in this file.
 - **Technical debt**: Document separately in `docs/technical-debt.md` rather than changelog
 - **Target audience**: Developers who need to understand what changed, not how it was implemented
 
+## [2025-09-17] - HTML-Over-Wire Refactor: Phase 2 Complete + Bug Fixes
+
+### Added
+- Server-rendered subscription forms with populated data and dropdowns
+- New form endpoints that return complete HTML instead of requiring client-side population
+- Event delegation pattern for all modal and form interactions
+
+### Changed
+- Modal forms now load complete HTML from server instead of fetching JSON data
+- Form submissions return HTML fragments for seamless updates without page reloads
+- CRUD operations (create, update, delete) now follow HTML-over-wire architecture
+- Eliminated ~400 lines of client-side form and dropdown JavaScript complexity
+
+### Fixed
+- Modal delete button functionality restored after Phase 1 changes
+- Modal close button (X) now works correctly with server-rendered content
+- Floating form labels properly hide/show when typing in fields
+- Event handling standardized across all interactive elements
+
+### Notes
+- HTML-over-wire architecture now fully implemented for core subscription management
+- Modal functionality completely restored and improved over pre-refactor state
+- Server owns all presentation logic, client handles only UI interactions
+- Application maintains full functionality while achieving architectural goals
+
 ## [2025-09-17] - HTML-Over-Wire Refactor: Phase 1 Step 3
 
 ### Changed

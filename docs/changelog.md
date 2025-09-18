@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - **Technical debt**: Document separately in `docs/technical-debt.md` rather than changelog
 - **Target audience**: Developers who need to understand what changed, not how it was implemented
 
-## [2025-09-17] - HTML-Over-Wire Refactor: Phase 2 Complete + Bug Fixes
+## [2025-09-17] - HTML-Over-Wire Refactor: Phase 2 Complete + Bug Fixes - CHANGED TO PARTIALLY COMPLETE ON RE-REVIEW. LIVE PLAN DOCUMENTS ADJUSTED. THIS ENTRY BELOW HAS INACCURACIES.
 
 ### Added
 - Server-rendered subscription forms with populated data and dropdowns

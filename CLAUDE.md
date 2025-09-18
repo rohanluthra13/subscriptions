@@ -36,7 +36,7 @@ rm subscriptions.db
 
 **Architecture Philosophy: "HTML Over The Wire" + Agent-First**
 - **Server-side rendering**: Python builds complete HTML using templates
-- **Minimal JavaScript**: Just enough for smooth SPA-like navigation (~500-800 lines)
+- **Minimal JavaScript**: Modal UX and smooth navigation (~550 lines total)
 - **Template-based presentation**: Clean separation of data preparation and UI rendering
 - **Progressive enhancement**: Works without JavaScript, enhanced with it
 - **Single-file simplicity**: Everything in `main.py` for complete AI agent context
@@ -108,6 +108,7 @@ OPENAI_MODEL=gpt-4o-mini
 - Keep server-side logic simple and traceable
 - Avoid complex client-side state management
 - Use JavaScript for navigation/UX, not business logic
+- Modal-based AJAX follows HTML-over-wire principles (fetch HTML fragments, not JSON)
 - Maintain agent-friendly single-file approach while using templates for presentation
 
 ## Key Database Tables

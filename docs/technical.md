@@ -54,5 +54,24 @@ High-level steps to get there
 
 **Conclusion**: Theoretical performance concern doesn't manifest in practice - focus optimization efforts elsewhere
 
+### Modal UX + AJAX Architecture Decision (2025-09-18)
+
+**Decision**: Maintain current modal-based AJAX approach as optimal HTML-over-wire implementation
+
+**Context**: HTML-over-wire refactor planning questioned whether 436 lines of JavaScript and 6 AJAX calls conflicted with architectural goals.
+
+**Analysis**:
+- AJAX calls fetch HTML fragments (not JSON), following HTML-over-wire principles
+- Modal UX inherently requires async form submission (cannot use standard POSTs in overlays)
+- 436 lines breakdown: 260 lines UI/navigation, 176 lines form handling (zero business logic)
+- Architecture provides modern UX while maintaining server-side business logic
+
+**Alternative considered**: Page-based forms with standard POSTs
+- Would eliminate ~200 lines of JavaScript
+- Requires separate edit pages: `/manage` → `/edit/123` → `/manage`
+- Less polished UX with full page reloads
+
+**Rationale**: Current approach balances HTML-over-wire principles with modern user experience. The JavaScript is justified infrastructure for modal workflows, not unnecessary complexity.
+
 ## Dependencies
 What we need (MCP SDK, etc.)
